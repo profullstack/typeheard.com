@@ -31,8 +31,8 @@ a{color:var(--accent)}
 header{border-bottom:1px solid var(--line)}
 header .wrap{display:flex;align-items:center;flex-wrap:wrap;gap:6px 20px;min-height:64px;padding-top:10px;padding-bottom:10px}
 @media(max-width:560px){header nav{margin-left:0;width:100%;gap:16px}}
-.brand{font-weight:800;font-size:21px;text-decoration:none;color:var(--fg);letter-spacing:-.03em}
-.brand span{color:var(--accent)}
+.brand{font-weight:800;font-size:21px;text-decoration:none;color:var(--fg);letter-spacing:-.03em;display:flex;align-items:center;gap:9px}
+.brand b{color:var(--accent);font-weight:inherit}
 nav{margin-left:auto;display:flex;gap:18px;font-size:15px;flex-wrap:wrap}
 nav a{text-decoration:none;color:var(--mut)}nav a:hover{color:var(--fg)}
 h1{font-size:clamp(32px,5.5vw,50px);line-height:1.08;letter-spacing:-.035em;margin:48px 0 12px}
@@ -84,12 +84,19 @@ function page({ title, description, body, canonical, config }) {
 ${canonical ? `<link rel="canonical" href="${esc(canonical)}">` : ''}
 <meta property="og:title" content="${esc(title)}">
 <meta property="og:description" content="${esc(description)}">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>👂</text></svg>">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/icons/favicon-32.png" sizes="32x32" type="image/png">
+<link rel="icon" href="/favicon.ico" sizes="any">
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon-180x180.png">
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#fbfbf8" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#100f0c" media="(prefers-color-scheme: dark)">
+<meta property="og:image" content="${esc(site)}/icons/icon-512x512.png">
 <style>${STYLE}</style>
 </head>
 <body>
 <header><div class="wrap">
-  <a class="brand" href="/">type<span>heard</span></a>
+  <a class="brand" href="/"><img src="/favicon.svg" alt="" width="30" height="30"><span>type<b>heard</b></span></a>
   <nav>
     <a href="/pricing">Pricing</a>
     <a href="/docs">API</a>

@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { unlink } from 'node:fs/promises';
-import { extname, join } from 'node:path';
+import { dirname, extname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { throttle } from '@profullstack/throttle/hono';
 import { createGateway } from '@profullstack/x402-gateway';
 import * as auth from '@typeheard/auth';
@@ -98,6 +99,33 @@ app.use(
 const html = (c, body, status = 200) => c.html(body, status);
 
 app.get('/healthz', (c) => c.text('ok'));
+
+/**
+ * The logo, favicons and manifest, straight off disk. A short allowlist rather than a
+ * static middleware: there are a dozen files, and nothing else in public/ should be
+ * reachable by guessing a name.
+ */
+const PUBLIC_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', 'public');
+const ASSET_TYPES = {
+  '.png': 'image/png',
+  '.svg': 'image/svg+xml',
+  '.ico': 'image/x-icon',
+  '.webmanifest': 'application/manifest+json',
+};
+const asset = (path) => async (c) => {
+  const file = Bun.file(join(PUBLIC_DIR, path));
+  if (!(await file.exists())) return c.notFound();
+  c.header('content-type', ASSET_TYPES[extname(path)] ?? 'application/octet-stream');
+  c.header('cache-control', 'public, max-age=86400');
+  return c.body(await file.arrayBuffer());
+};
+for (const name of ['favicon.ico', 'favicon.svg', 'logo.svg', 'manifest.webmanifest']) {
+  app.get(`/${name}`, asset(name));
+}
+app.get('/icons/:name', (c) => {
+  const name = c.req.param('name');
+  return /^[a-z0-9-]+\.png$/i.test(name) ? asset(`icons/${name}`)(c) : c.notFound();
+});
 
 app.get('/', async (c) => {
   const { user } = await caller(c);
