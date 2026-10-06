@@ -1,0 +1,27 @@
+# Everything needed to run typeheard privately: a database and the app. No CoinPay
+# variables, so payments are off and every cutout is full resolution and free, which
+# is the right shape for a self-hosted instance.
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_PASSWORD: typeheard
+      POSTGRES_DB: typeheard
+    volumes: [typeheard-db:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d typeheard"]
+      interval: 5s
+      retries: 20
+
+  web:
+    build: .
+    ports: ["3000:3000"]
+    environment:
+      DATABASE_URL: postgres://postgres:typeheard@db:5432/typeheard
+      SITE_URL: http://localhost:3000
+      ROLES: web,infer
+    depends_on:
+      db: { condition: service_healthy }
+
+volumes:
+  typeheard-db:

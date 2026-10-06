@@ -1,0 +1,8 @@
+{
+  "name": "@typeheard/notify",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": { ".": "./src/index.js" },
+  "dependencies": { "@typeheard/config": "workspace:*" }
+}
