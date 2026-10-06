@@ -3,7 +3,7 @@
  *
  * Everything required is read once at import and throws here, at boot, rather than at
  * the moment a customer presses pay. Secrets live in the logicsrc vault and reach the
- * container as Railway variables; there is deliberately no .env loading in this file.
+ * container through the box's app.env; there is deliberately no .env loading in this file.
  */
 
 /** @param {string} name @param {string} [fallback] */
@@ -48,13 +48,6 @@ export const config = {
    *  dials localhost and dies with a Postgres driver error that names nothing. */
   databaseUrl: req('DATABASE_URL'),
 
-  /** Which roles this process runs. One service runs "web,infer"; splitting the
-   *  model onto a GPU box later is a variable change, not a code change. */
-  roles: opt('ROLES', 'web,infer')
-    .split(',')
-    .map((s) => s.trim())
-    .filter(Boolean),
-
   session: {
     cookie: opt('SESSION_COOKIE', 'typeheard_session'),
     ttlDays: num('SESSION_TTL_DAYS', 30),
@@ -71,54 +64,48 @@ export const config = {
   },
 
   /**
-   * The model service.
+   * The ear: whisper.cpp on this box, through @profullstack/media2markdown-core.
    *
-   * `infer` is a local Python process in the same container by default, because one
-   * image and one Railway service is the house shape. Pointing INFER_URL at a GPU box
-   * is how this scales without touching code.
+   * One transcription at a time per core is the most whisper.cpp wants, and two
+   * at once on a shared box just makes both slow; CONCURRENCY is how many jobs
+   * the queue runs in parallel, not how many threads each gets.
    */
-  infer: {
-    url: opt('INFER_URL', 'http://127.0.0.1:7001').replace(/\/$/, ''),
-    /**
-     * Which open model answers.
-     *
-     * birefnet-general is the best of them and also the slowest; u2net is the one that
-     * survives a CPU-only container. Both are permissively licensed, which is the whole
-     * reason they are the two on offer -- see MODELS.md. BRIA RMBG is deliberately absent:
-     * its weights are CC BY-NC and cannot back anything anyone pays for.
-     */
-    model: opt('INFER_MODEL', 'u2net'),
-    /**
-     * The paid model.
-     *
-     * birefnet-general-lite: the BiRefNet architecture, MIT licensed, and small enough
-     * to bake into the image. The full birefnet-general is better still but is roughly
-     * a gigabyte and wants a GPU to be worth the wait, so it is fetched on demand
-     * rather than shipped -- set INFER_HD_MODEL=birefnet-general once there is one.
-     */
-    hdModel: opt('INFER_HD_MODEL', 'birefnet-general-lite'),
-    timeoutMs: num('INFER_TIMEOUT_MS', 120_000),
-    /** Spawned by this container when ROLES includes `infer`. */
-    spawn: bool('INFER_SPAWN', true),
-    port: num('INFER_PORT', 7001),
+  whisper: {
+    /** Absolute path to a ggml model. Empty lets media2markdown-core pick the one it finds. */
+    model: opt('WHISPER_MODEL', ''),
+    concurrency: num('CONCURRENCY', 1),
+  },
+
+  /** Where uploads wait for their turn. Deleted as soon as the words are out. */
+  dataDir: opt('DATA_DIR', '/tmp/typeheard'),
+
+  /** What an upload may be. Big enough for a long interview in video, not a film archive. */
+  uploads: {
+    maxBytes: num('MAX_UPLOAD_BYTES', 1024 * 1024 * 1024),
+    maxMinutes: num('MAX_MINUTES', 240),
   },
 
   /**
-   * What a cutout costs, in cents, and what you get without paying.
+   * What a minute costs, and what you get without paying.
    *
-   * The free tier is capped by PIXELS rather than by a count, because a count is what
-   * forces a signup wall in front of somebody who just wants to see whether the thing
-   * works at all. A preview is genuinely free and genuinely unlimited; the money is in
-   * full resolution.
+   * The free tier is capped by LENGTH rather than by a count: the first three
+   * minutes of anything, as often as you like. That answers "is it any good on my
+   * recording" without a signup wall, and still leaves the rest of the hour worth
+   * paying for. One credit is one minute of audio, rounded up per file.
    */
   pricing: {
-    previewMaxEdge: num('PREVIEW_MAX_EDGE', 640),
-    hdCents: num('HD_CENTS', 3),
-    /** Top-up bundles, cents -> credits. Credits never expire; that is the pitch. */
+    /**
+     * A private instance: every file in full, for anyone, with no account.
+     * Explicit rather than inferred from "payments are off", because the public
+     * site runs without CoinPay for a while too and must not become free then.
+     */
+    freeForAll: bool('FREE_FOR_ALL', false),
+    previewSeconds: num('PREVIEW_SECONDS', 180),
+    /** Top-up bundles, cents -> minutes. Credits never expire; that is the pitch against monthly plans. */
     topups: [
-      { cents: 500, credits: 200 },
-      { cents: 2000, credits: 1000 },
-      { cents: 10_000, credits: 6000 },
+      { cents: 500, credits: 300 },
+      { cents: 2000, credits: 1500 },
+      { cents: 5000, credits: 4500 },
     ],
   },
 
@@ -167,8 +154,8 @@ export const config = {
     /**
      * What the buyer gets if they express no preference.
      *
-     * A stablecoin on a cheap chain: the bill is three cents an image, and a default
-     * whose network fee costs more than the top-up is not a default.
+     * A stablecoin on a cheap chain: the smallest top-up is five dollars, and a
+     * default whose network fee costs a meaningful slice of that is not a default.
      */
     get defaultChain() {
       const chosen = opt('COINPAY_CHAIN', 'USDC_POL').toUpperCase();
@@ -208,30 +195,28 @@ export const config = {
     get enabled() {
       return bool('X402_ENABLED', false) && Boolean(this.payTo && this.scopedKey);
     },
-    /** What one HD cutout costs an agent, in cents. Money is never a float. */
-    priceCents: num('X402_PRICE_CENTS', 3),
+    /** What one full transcription (up to x402.maxMinutes of audio) costs an agent, in cents. */
+    priceCents: num('X402_PRICE_CENTS', 50),
+    maxMinutes: num('X402_MAX_MINUTES', 60),
     currency: opt('X402_CURRENCY', 'USD'),
     /** A pass, for an agent doing a batch rather than a single image. */
     passMinutes: num('X402_PASS_MINUTES', 60),
   },
 
   /**
-   * Shared results.
+   * How long a transcript is kept.
    *
-   * Every cutout gets a link, free or paid. The expiry is not optional and not
-   * long: these are other people's photographs, and the id is the only thing
-   * protecting them, so holding them indefinitely turns a convenience into a
-   * liability that grows on its own.
+   * The id is the only thing protecting somebody's interview, so an anonymous
+   * preview goes after a week. An account's transcripts stay until it deletes
+   * them or this many days pass, whichever comes first.
    */
-  shares: {
-    ttlDays: num('SHARE_TTL_DAYS', 7),
-    /** Anything larger is served but not kept. */
-    maxBytes: num('SHARE_MAX_BYTES', 8 * 1024 * 1024),
-    /** How often a running instance sweeps what has expired. */
-    purgeIntervalMinutes: num('SHARE_PURGE_MINUTES', 60),
+  retention: {
+    anonDays: num('ANON_TTL_DAYS', 7),
+    accountDays: num('ACCOUNT_TTL_DAYS', 365),
+    purgeIntervalMinutes: num('PURGE_MINUTES', 60),
   },
 
-  /** The free allowance before a caller is asked to pay. Previews only. */
+  /** The free allowance of requests before a caller is asked to pay. */
   throttle: {
     limit: num('THROTTLE_LIMIT', 60),
     windowSeconds: num('THROTTLE_WINDOW_SECONDS', 60),

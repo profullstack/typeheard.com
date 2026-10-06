@@ -1,65 +1,67 @@
-# One image, one Railway service: the Bun web app and the Python model in the same
-# container, talking over loopback. Splitting the model onto a GPU box later is an
-# INFER_URL change rather than a rebuild.
-FROM oven/bun:1.3.14-slim AS base
-WORKDIR /app
+# One image: the Bun web app, ffmpeg, and whisper.cpp with its model baked in.
+# Transcription runs in-process on the box's CPU; nothing calls a hosted model.
 
-# ---------------------------------------------------------------- JS deps --
-FROM base AS deps
+# ------------------------------------------------------------- whisper.cpp --
+# Built once here, statically, so the running container never compiles and the
+# binary does not depend on an OpenMP runtime the slim base may not carry.
+FROM debian:bookworm-slim AS whisper
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends git cmake build-essential ca-certificates curl \
+ && rm -rf /var/lib/apt/lists/*
+RUN git clone --depth 1 https://github.com/ggml-org/whisper.cpp /opt/whisper.cpp \
+ && cmake -S /opt/whisper.cpp -B /opt/whisper.cpp/build -DCMAKE_BUILD_TYPE=Release \
+      -DBUILD_SHARED_LIBS=OFF -DGGML_OPENMP=OFF \
+ && cmake --build /opt/whisper.cpp/build --config Release -j "$(nproc)" --target whisper-cli \
+ && install -Dm755 /opt/whisper.cpp/build/bin/whisper-cli /out/whisper-cli
+# The multilingual model, not base.en: people send interviews in every language,
+# and an English-only model turns Spanish into confident English nonsense.
+# WHISPER_MODEL_NAME=small trades about 3x the CPU for noticeably better text.
+ARG WHISPER_MODEL_NAME=base
+RUN sh /opt/whisper.cpp/models/download-ggml-model.sh "$WHISPER_MODEL_NAME" \
+ && install -Dm644 "/opt/whisper.cpp/models/ggml-$WHISPER_MODEL_NAME.bin" "/out/ggml-$WHISPER_MODEL_NAME.bin"
+
+# ----------------------------------------------------------------- JS deps --
+FROM oven/bun:1.3.14-slim AS deps
+WORKDIR /app
 COPY package.json bun.lock* bunfig.toml ./
 COPY apps/web/package.json apps/web/
 COPY packages/auth/package.json packages/auth/
+COPY packages/cli/package.json packages/cli/
 COPY packages/config/package.json packages/config/
-COPY packages/cutout/package.json packages/cutout/
 COPY packages/db/package.json packages/db/
+COPY packages/mcp/package.json packages/mcp/
 COPY packages/notify/package.json packages/notify/
 COPY packages/payments/package.json packages/payments/
+COPY packages/transcribe/package.json packages/transcribe/
 RUN bun install --frozen-lockfile || bun install
 
-# ---------------------------------------------------------------- runtime --
-FROM base AS runtime
+# ----------------------------------------------------------------- runtime --
+FROM oven/bun:1.3.14-slim AS runtime
+ARG WHISPER_MODEL_NAME=base
 ENV NODE_ENV=production \
-    PYTHONUNBUFFERED=1 \
-    # rembg caches weights here; baked below so no deploy waits on a download.
-    U2NET_HOME=/app/models \
-    PATH="/opt/venv/bin:$PATH"
-
+    XDG_DATA_HOME=/app/.data \
+    WHISPER_MODEL=/app/.data/media2markdown/models/ggml-${WHISPER_MODEL_NAME}.bin \
+    DATA_DIR=/data
 RUN apt-get update \
- && apt-get install -y --no-install-recommends python3 python3-venv libgl1 libglib2.0-0 curl \
+ && apt-get install -y --no-install-recommends ffmpeg ca-certificates \
  && rm -rf /var/lib/apt/lists/*
-
-# A venv rather than --break-system-packages: Debian's python is also apt's, and
-# pip writing into it is how an image stops being reproducible.
-RUN python3 -m venv /opt/venv
-COPY infer/requirements.txt /app/infer/requirements.txt
-RUN pip install --no-cache-dir -r /app/infer/requirements.txt
-
-# Bake the weights into the image.
-#
-# rembg otherwise downloads them from GitHub on first use, inside the first real
-# request, on a container that has already told Railway it is healthy. That turns a
-# cold start into a minute-long timeout and makes the deploy depend on GitHub being
-# up at boot. Both baked models are permissively licensed (Apache-2.0); BiRefNet is
-# MIT and better, but it is roughly a gigabyte and is fetched on demand instead --
-# set INFER_HD_MODEL=birefnet-general once there is a GPU under this.
-ARG BAKE_MODELS="u2net birefnet-general-lite"
-RUN mkdir -p /app/models && \
-    BAKE="$BAKE_MODELS" python3 -c "import os; from rembg import new_session; [new_session(m) for m in os.environ['BAKE'].split()]" \
-    && ls -lh /app/models
-
-# Copy the installed JS deps whole, not just /app/node_modules: Bun's isolated linker
-# puts each workspace's dependencies in ITS OWN node_modules rather than hoisting, so
-# copying only the root leaves every workspace import unresolvable. Listing the nested
-# directories individually is not an option either -- a package with no dependencies
-# has no node_modules at all and the COPY would fail.
+WORKDIR /app
+# media2markdown-core looks for tools in $XDG_DATA_HOME/media2markdown/bin first
+# and for models in $XDG_DATA_HOME/media2markdown/models.
+COPY --from=whisper /out/whisper-cli /app/.data/media2markdown/bin/whisper-cli
+COPY --from=whisper /out/ggml-${WHISPER_MODEL_NAME}.bin /app/.data/media2markdown/models/
+RUN ln -s /usr/bin/ffmpeg /app/.data/media2markdown/bin/ffmpeg \
+ && ln -s /usr/bin/ffprobe /app/.data/media2markdown/bin/ffprobe \
+ && mkdir -p /data && chown bun:bun /data
+# Bun's isolated linker keeps each workspace's dependencies in its own
+# node_modules, so the whole install is copied, not just the root.
 COPY --from=deps /app /app
-# .dockerignore excludes node_modules, so this overlays source without clobbering it.
 COPY . .
-
-# Railway injects PORT; the app reads it. Never hardcode one here or the edge proxy
-# forwards to a closed socket while the container still reports healthy.
+# The build context keeps the checkout's own permissions, and a box with umask 007
+# leaves everything unreadable to the unprivileged user below.
+RUN chmod -R a+rX /app
+USER bun
 EXPOSE 3000
-HEALTHCHECK --interval=30s --timeout=5s --start-period=180s \
+HEALTHCHECK --interval=30s --timeout=5s --start-period=60s \
   CMD bun -e "fetch('http://127.0.0.1:'+(process.env.PORT||3000)+'/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
-
 CMD ["bun", "apps/web/src/main.js"]

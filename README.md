@@ -1,130 +1,78 @@
 # typeheard
 
-**BG, gone.** Background removal that runs on open models, self-hosts in one
-container, and bills by the image instead of by the month.
+Drop a recording, get what was said.
 
-Live at [typeheard.com](https://typeheard.com). MIT licensed.
+typeheard transcribes the audio and video people already have (interviews,
+lectures, podcasts, voice memos) with [whisper.cpp](https://github.com/ggml-org/whisper.cpp)
+on our own hardware, and bills by the minute of audio instead of by the month.
 
-## What it is
+- **Free:** the first 3 minutes of any file, no account.
+- **Whole files:** one credit per audio minute. $5 buys 300 minutes, and minutes never expire.
+- **Agents:** x402 per call, no account and no key.
+- **Formats:** plain text, timestamped Markdown, SRT, VTT, JSON.
+- **Surfaces:** web, HTTP API, CLI, TUI and an MCP server.
 
-Background removal is a solved problem with excellent open models behind it, and it
-is still mostly sold as a subscription with credits that expire. typeheard is the same
-capability with the pricing turned back into what it actually is: a few cents of
-compute.
+Built because people keep asking Reddit for "an Otter.ai alternative for files
+I already have" and "transcription software for my thesis interviews".
 
-* **Free previews.** Capped by pixels, not by a counter. No account, no card. A
-  visitor can find out whether it works on their photo without meeting a signup wall.
-* **3 cents a full-resolution image.** Credits never expire. Nothing to cancel.
-* **Agents pay per call.** `POST /api/cutout` answers `402` with an x402 offer and
-  settles in USDC. No account, no key, no card.
-* **Or run it yourself.** `docker compose up`. Leave the payment variables unset and
-  it is simply a free private instance.
-
-## Models
-
-Every model this ships is permissively licensed, because the hosted service is billed
-for and a non-commercial model would poison that.
-
-| Model | License | Role |
-|---|---|---|
-| `u2net` | Apache-2.0 | preview tier, baked into the image |
-| `birefnet-general-lite` | MIT | paid tier, baked into the image |
-| `birefnet-general` | MIT | best quality, ~1GB, fetched on demand |
-| `birefnet-portrait` | MIT | portraits, fetched on demand |
-| `isnet-general-use` | Apache-2.0 | available, fetched on demand |
-
-BRIA's RMBG is the obvious better-known choice and is **deliberately absent**. Its
-weights are CC BY-NC 4.0 and commercial use requires a paid agreement with BRIA.
-rembg will happily serve it under the name `bria-rmbg`, so the model allowlist in
-`infer/server.py` is what actually keeps it out of a billed service. That allowlist is
-load bearing, not decoration.
-
-The full `birefnet-general` is better again but is roughly a gigabyte and wants a GPU
-to be worth the wait. Set `INFER_HD_MODEL=birefnet-general` once there is one.
-
-## Run it
+## Use it
 
 ```bash
-git clone https://github.com/profullstack/typeheard.com
-cd typeheard.com
-docker compose up
+npx -y @profullstack/typeheard interview.m4a                  # prints the text
+npx -y @profullstack/typeheard talk.mp4 --format srt --out talk.srt
+npx -y @profullstack/typeheard login                          # API key for whole files
+npx -y @profullstack/typeheard tui
 ```
-
-That is the whole setup. The app migrates its own database on boot.
-
-Without Docker you need Bun 1.3+, Python 3.12+ and a Postgres:
 
 ```bash
-bun install
-pip install -r infer/requirements.txt
-DATABASE_URL=postgres://localhost/typeheard bun run dev
+curl -F file=@interview.m4a -H "Authorization: Bearer $TYPEHEARD_API_KEY" https://typeheard.com/api/v1/transcripts
+curl https://typeheard.com/api/v1/transcripts/<id>/txt        # also md, srt, vtt, json
 ```
 
-## Architecture
+MCP: `npx -y @profullstack/typeheard-mcp` with `TYPEHEARD_API_KEY` set. Its tools are
+`transcribe_file`, `get_transcript` and `list_transcripts`.
 
-One image, two runtimes, talking over loopback.
+## How it is built
 
-```
-browser / agent
-      |
-      v
-  Bun + Hono  ......  Postgres (accounts, credit ledger, payments)
-      |
-      v  127.0.0.1:7001
-  Python + rembg (ONNX)
-```
+| | |
+| --- | --- |
+| `apps/web` | Bun + Hono: pages, API, magic-link + passkey auth, CoinPay top-ups, x402 |
+| `packages/transcribe` | ffmpeg + whisper.cpp via `@profullstack/media2markdown-core`; the formats |
+| `packages/db` | Postgres. `transcripts` is also the job queue (`for update skip locked`) |
+| `packages/cli` | `@profullstack/typeheard`: CLI, hqtui TUI, and the API client |
+| `packages/mcp` | `@profullstack/typeheard-mcp`: stdio MCP server |
+| `packages/auth`, `payments`, `notify`, `config` | shared with bg0ne.com |
 
-The model is a separate process because every good open background-removal model is
-Python and ships as ONNX, and the web app is Bun. `INFER_URL` is what makes that a
-deployment decision rather than an architectural one: point it at a GPU box and
-nothing else changes.
+A job is a row. The upload is written to `DATA_DIR`, the row is queued, and a worker
+claims it, transcribes it and stores the segments. The upload is deleted as soon as the
+words are out. Jobs survive a restart. A failure refunds the minutes it was charged.
 
-### Why the credit ledger is a ledger
-
-`credit_ledger` is append-only and the balance is its sum. A single `balance` column
-is one bad `UPDATE` away from being wrong forever with no way to find out when it went
-wrong, and these are bought with real money, so people ask where they went.
-
-Two consequences worth knowing before editing that code:
-
-* A spend happens **before** the work, and takes `select ... for update` on the user
-  row. Without the lock, twenty concurrent cutouts all read the same balance, all pass
-  the check, and the account finishes negative having been given work nobody paid for.
-  There is a test for exactly this.
-* Because the spend comes first, a failed cutout has to be **refunded explicitly**.
-  The refund is a fresh positive row rather than a deleted one: the ledger records
-  what happened, and what happened is that somebody was charged and then made whole.
-
-Credit grants are idempotent per payment, enforced by a unique index rather than by
-remembering. CoinPay retries a webhook until it is acknowledged, so "we already
-granted this" has to be a database constraint.
-
-## Environment
-
-| Variable | Required | |
-|---|---|---|
-| `DATABASE_URL` | yes | the only hard requirement |
-| `SITE_URL` | yes in prod | passkey rpID derives from it |
-| `ROLES` | no | `web,infer` by default |
-| `INFER_URL` | no | loopback by default; a remote URL stops the local model spawning |
-| `INFER_HD_MODEL` | no | `isnet-general-use` |
-| `RESEND_API_KEY` | no | without it, sign-in links are logged instead of sent |
-| `COINPAY_API_KEY` | no | `cp_live_`/`cp_test_`; without it payments are off |
-| `COINPAY_BUSINESS_ID` | no | |
-| `COINPAY_WEBHOOK_SECRET` | no | |
-| `COINPAY_X402_KEY` | no | a **scoped** key, not the merchant key above |
-| `X402_PAY_TO` | no | the EVM address agent payments land in |
-
-Secrets belong in the vault and reach the container as platform variables. There is
-deliberately no `.env` loading in this app.
-
-## Tests
+## Run it yourself
 
 ```bash
-docker run -d --name pg -e POSTGRES_PASSWORD=test -e POSTGRES_DB=typeheard -p 55433:5432 postgres:16-alpine
-DATABASE_URL=postgres://postgres:test@127.0.0.1:55433/typeheard bun test
+docker compose up        # Postgres + the app on :3000, payments off, everything free
 ```
 
-## License
+Or `bun install && DATABASE_URL=... bun run dev`, with `ffmpeg` and `whisper-cli` plus a
+ggml model where media2markdown-core looks (`$XDG_DATA_HOME/media2markdown/`).
 
-MIT. The models carry their own licenses, listed above.
+| Variable | |
+| --- | --- |
+| `DATABASE_URL` | required |
+| `SITE_URL` | public origin; the passkey rpID comes from it |
+| `WHISPER_MODEL` | path to a ggml model; the image bakes `ggml-base.bin` (multilingual) |
+| `CONCURRENCY` | transcriptions at once (default 1) |
+| `PREVIEW_SECONDS` | free preview length (default 180) |
+| `RESEND_API_KEY`, `MAIL_FROM` | sign-in mail |
+| `COINPAY_API_KEY`, `COINPAY_BUSINESS_ID`, `COINPAY_WEBHOOK_SECRET` | top-ups |
+| `X402_ENABLED`, `X402_PAY_TO`, `COINPAY_X402_KEY` | per-call payment for agents |
+
+Secrets live in the logicsrc vault (`typeheardcom--prod`), not in a `.env`.
+
+## Test
+
+```bash
+DATABASE_URL=postgres://... bun test
+```
+
+MIT.

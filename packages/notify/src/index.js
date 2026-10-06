@@ -30,11 +30,11 @@ export async function sendLoginLink({ email, url }) {
 export async function sendTopupReceipt({ email, credits, amountCents }) {
   return send({
     to: email,
-    subject: `${credits} typeheard credits added`,
+    subject: `${credits} typeheard minutes added`,
     text: [
-      `Your payment of $${(amountCents / 100).toFixed(2)} settled and ${credits} credits are on your account.`,
+      `Your payment of $${(amountCents / 100).toFixed(2)} settled and ${credits} minutes of transcription are on your account.`,
       '',
-      'Credits do not expire.',
+      'Minutes do not expire.',
       '',
       `${config.siteUrl}/account`,
     ].join('\n'),

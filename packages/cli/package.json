@@ -1,0 +1,41 @@
+{
+  "name": "@profullstack/typeheard",
+  "version": "0.1.0",
+  "description": "Transcribe audio and video from the terminal: typeheard <file>. Also a TUI and the client the MCP server uses.",
+  "type": "module",
+  "license": "MIT",
+  "author": "Profullstack, Inc.",
+  "homepage": "https://typeheard.com",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/profullstack/typeheard.com",
+    "directory": "packages/cli"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "bin": {
+    "typeheard": "./bin/typeheard.mjs"
+  },
+  "exports": {
+    ".": "./src/cli.js",
+    "./client": "./src/client.js"
+  },
+  "files": [
+    "bin",
+    "src",
+    "README.md"
+  ],
+  "dependencies": {
+    "@profullstack/hqtui": "^0.8.0"
+  },
+  "keywords": [
+    "transcription",
+    "speech-to-text",
+    "whisper",
+    "subtitles",
+    "srt",
+    "cli",
+    "tui"
+  ]
+}

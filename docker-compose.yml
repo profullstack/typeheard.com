@@ -1,5 +1,5 @@
 # Everything needed to run typeheard privately: a database and the app. No CoinPay
-# variables, so payments are off and every cutout is full resolution and free, which
+# variables, so payments are off and every file is transcribed in full for free, which
 # is the right shape for a self-hosted instance.
 services:
   db:
@@ -19,7 +19,8 @@ services:
     environment:
       DATABASE_URL: postgres://postgres:typeheard@db:5432/typeheard
       SITE_URL: http://localhost:3000
-      ROLES: web,infer
+      CONCURRENCY: "1"
+      FREE_FOR_ALL: "1"
     depends_on:
       db: { condition: service_healthy }
 

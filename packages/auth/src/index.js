@@ -1,12 +1,12 @@
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
-import { config } from '@typeheard/config';
-import * as q from '@typeheard/db/queries';
 import {
   generateAuthenticationOptions,
   generateRegistrationOptions,
   verifyAuthenticationResponse,
   verifyRegistrationResponse,
 } from '@simplewebauthn/server';
+import { config } from '@typeheard/config';
+import * as q from '@typeheard/db/queries';
 
 /**
  * Magic link + passkey. No passwords.
@@ -175,7 +175,7 @@ export function sessionCookie(sessionId, { clear = false } = {}) {
 
 /* ---------------------------------------------------------------- api keys -- */
 
-const API_PREFIX = 'bg_live_';
+const API_PREFIX = 'th_';
 
 /**
  * Mint an API key. The plaintext is returned once and never stored.
@@ -198,7 +198,9 @@ export async function createApiKey({ userId, name = 'default' }) {
 
 export async function userFromApiKey(header) {
   if (!header) return null;
-  const token = String(header).replace(/^Bearer\s+/i, '').trim();
+  const token = String(header)
+    .replace(/^Bearer\s+/i, '')
+    .trim();
   if (!token.startsWith(API_PREFIX)) return null;
   return q.userForApiKey(createHash('sha256').update(token).digest());
 }

@@ -1,0 +1,37 @@
+{
+  "name": "@profullstack/typeheard-mcp",
+  "version": "0.1.0",
+  "description": "MCP server for typeheard.com: transcribe audio and video files from any MCP client.",
+  "type": "module",
+  "license": "MIT",
+  "author": "Profullstack, Inc.",
+  "homepage": "https://typeheard.com/docs",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/profullstack/typeheard.com",
+    "directory": "packages/mcp"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "bin": {
+    "typeheard-mcp": "./bin/typeheard-mcp.mjs"
+  },
+  "exports": {
+    ".": "./src/server.js"
+  },
+  "files": [
+    "bin",
+    "src",
+    "README.md"
+  ],
+  "dependencies": {
+    "@profullstack/typeheard": "workspace:*"
+  },
+  "keywords": [
+    "mcp",
+    "transcription",
+    "speech-to-text",
+    "whisper"
+  ]
+}

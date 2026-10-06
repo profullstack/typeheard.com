@@ -22,10 +22,9 @@ import * as q from '../packages/db/src/queries.js';
 let user;
 
 beforeEach(async () => {
-  await sql`truncate credit_ledger, cutouts, payments, sessions, api_keys, users restart identity cascade`;
+  await sql`truncate credit_ledger, transcripts, payments, sessions, api_keys, users restart identity cascade`;
   user = await q.findOrCreateUser(`test-${crypto.randomUUID()}@example.com`);
 });
-
 
 async function makePayment(amountCents, ref = crypto.randomUUID()) {
   const [row] = await sql`
@@ -76,31 +75,35 @@ test('two different payments both grant', async () => {
 
 test('spending refuses when the balance is short, and writes nothing', async () => {
   const payment = await makePayment(500);
-  await sql.begin((tx) => q.grantCredits(tx, { userId: user.id, credits: 2, paymentId: payment.id }));
+  await sql.begin((tx) =>
+    q.grantCredits(tx, { userId: user.id, credits: 2, paymentId: payment.id }),
+  );
 
-  expect(await q.spendCredits({ userId: user.id, cost: 1, reason: 'cutout' })).toBeTruthy();
-  expect(await q.spendCredits({ userId: user.id, cost: 1, reason: 'cutout' })).toBeTruthy();
+  expect(await q.spendCredits({ userId: user.id, cost: 1, reason: 'transcription' })).toBeTruthy();
+  expect(await q.spendCredits({ userId: user.id, cost: 1, reason: 'transcription' })).toBeTruthy();
 
   // Third one has nothing left to take.
-  expect(await q.spendCredits({ userId: user.id, cost: 1, reason: 'cutout' })).toBeNull();
+  expect(await q.spendCredits({ userId: user.id, cost: 1, reason: 'transcription' })).toBeNull();
   expect(await q.creditBalance(user.id)).toBe(0);
 });
 
 /**
  * The one that matters.
  *
- * Without `select ... for update` on the user row, twenty concurrent cutouts all read
+ * Without `select ... for update` on the user row, twenty concurrent uploads all read
  * the same balance, all pass the check, and all insert a debit -- leaving the account
  * deep in the negative having been given work nobody paid for. This asserts the
  * balance can never go below zero no matter how they interleave.
  */
 test('concurrent spends cannot oversell the last credits', async () => {
   const payment = await makePayment(500);
-  await sql.begin((tx) => q.grantCredits(tx, { userId: user.id, credits: 5, paymentId: payment.id }));
+  await sql.begin((tx) =>
+    q.grantCredits(tx, { userId: user.id, credits: 5, paymentId: payment.id }),
+  );
 
   const attempts = await Promise.all(
     Array.from({ length: 20 }, () =>
-      q.spendCredits({ userId: user.id, cost: 1, reason: 'cutout' }).catch(() => null),
+      q.spendCredits({ userId: user.id, cost: 1, reason: 'transcription' }).catch(() => null),
     ),
   );
 
@@ -109,11 +112,13 @@ test('concurrent spends cannot oversell the last credits', async () => {
   expect(await q.creditBalance(user.id)).toBe(0);
 });
 
-test('a refund puts back exactly what the failed cutout took', async () => {
+test('a refund puts back exactly what the failed transcription took', async () => {
   const payment = await makePayment(500);
-  await sql.begin((tx) => q.grantCredits(tx, { userId: user.id, credits: 3, paymentId: payment.id }));
+  await sql.begin((tx) =>
+    q.grantCredits(tx, { userId: user.id, credits: 3, paymentId: payment.id }),
+  );
 
-  const spend = await q.spendCredits({ userId: user.id, cost: 1, reason: 'cutout' });
+  const spend = await q.spendCredits({ userId: user.id, cost: 1, reason: 'transcription' });
   expect(await q.creditBalance(user.id)).toBe(2);
 
   await q.refundCredits({ userId: user.id, credits: spend.spent, reason: 'cutout failed' });
@@ -137,7 +142,7 @@ test('the ledger rejects a zero-delta row', async () => {
 test('an api key round-trips and its plaintext is never stored', async () => {
   const auth = await import('../packages/auth/src/index.js');
   const key = await auth.createApiKey({ userId: user.id, name: 'test' });
-  expect(key.plaintext.startsWith('bg_live_')).toBe(true);
+  expect(key.plaintext.startsWith('th_')).toBe(true);
 
   const found = await auth.userFromApiKey(`Bearer ${key.plaintext}`);
   expect(found?.id).toBe(user.id);
@@ -146,7 +151,7 @@ test('an api key round-trips and its plaintext is never stored', async () => {
   const [row] = await sql`select * from api_keys where user_id = ${user.id}`;
   expect(JSON.stringify(row)).not.toContain(key.plaintext);
 
-  expect(await auth.userFromApiKey('Bearer bg_live_wrong')).toBeNull();
+  expect(await auth.userFromApiKey('Bearer th_wrong')).toBeNull();
 });
 
 test('a garbage session cookie is a miss, not a crash', async () => {

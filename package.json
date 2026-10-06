@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "BG, gone. Background removal that runs on open models, self-hosts, and bills by the image.",
+  "description": "Drop a recording, get what was said. Transcription on whisper.cpp, billed by the minute, with a CLI, TUI, MCP server and API.",
   "workspaces": [
     "apps/*",
     "packages/*"

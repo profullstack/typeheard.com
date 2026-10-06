@@ -1,8 +1,8 @@
 /**
  * Server-rendered HTML as template strings.
  *
- * No JSX and no client framework: the whole app is one upload form and a canvas, and
- * a build step for that is a cost with nothing on the other side of it.
+ * No JSX and no client framework: the app is an upload form, a progress line and
+ * a page of text. A build step for that is a cost with nothing on the other side.
  */
 
 const esc = (s) =>
@@ -11,62 +11,69 @@ const esc = (s) =>
     (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch],
   );
 
+const mins = (seconds) => {
+  const s = Math.round(Number(seconds) || 0);
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const r = s % 60;
+  return h
+    ? `${h}:${String(m).padStart(2, '0')}:${String(r).padStart(2, '0')}`
+    : `${m}:${String(r).padStart(2, '0')}`;
+};
+
 const STYLE = `
-:root{color-scheme:light dark;--bg:#fbfbfd;--fg:#14141a;--mut:#6b6b78;--line:#e4e4ec;--card:#fff;--accent:#5b4bff;--accent-fg:#fff}
-@media(prefers-color-scheme:dark){:root{--bg:#0d0d12;--fg:#f0f0f5;--mut:#9a9aab;--line:#24242e;--card:#15151d;--accent:#8c7dff;--accent-fg:#0d0d12}}
+:root{color-scheme:light dark;--bg:#fbfbf8;--fg:#17150f;--mut:#6d6a60;--line:#e6e3d8;--card:#fff;--accent:#e4572e;--accent-fg:#fff;--hi:#fff4c2}
+@media(prefers-color-scheme:dark){:root{--bg:#100f0c;--fg:#f3f1ea;--mut:#a29f93;--line:#2a2822;--card:#18170f;--accent:#ff7a50;--accent-fg:#100f0c;--hi:#3a3110}}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.6 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
 a{color:var(--accent)}
-.wrap{max-width:900px;margin:0 auto;padding:0 20px}
+.wrap{max-width:860px;margin:0 auto;padding:0 20px}
 header{border-bottom:1px solid var(--line)}
-header .wrap{display:flex;align-items:center;gap:20px;height:64px}
-.brand{font-weight:700;font-size:20px;text-decoration:none;color:var(--fg);letter-spacing:-.02em}
-.brand span{color:var(--accent)}
-nav{margin-left:auto;display:flex;gap:18px;font-size:15px}
+header .wrap{display:flex;align-items:center;flex-wrap:wrap;gap:6px 20px;min-height:64px;padding-top:10px;padding-bottom:10px}
+@media(max-width:560px){header nav{margin-left:0;width:100%;gap:16px}}
+.brand{font-weight:800;font-size:21px;text-decoration:none;color:var(--fg);letter-spacing:-.03em;display:flex;align-items:center;gap:9px}
+.brand b{color:var(--accent);font-weight:inherit}
+nav{margin-left:auto;display:flex;gap:18px;font-size:15px;flex-wrap:wrap}
 nav a{text-decoration:none;color:var(--mut)}nav a:hover{color:var(--fg)}
-h1{font-size:clamp(30px,5vw,46px);line-height:1.1;letter-spacing:-.03em;margin:48px 0 12px}
+h1{font-size:clamp(32px,5.5vw,50px);line-height:1.08;letter-spacing:-.035em;margin:48px 0 12px}
 h2{font-size:22px;letter-spacing:-.02em;margin:40px 0 12px}
-.lede{font-size:19px;color:var(--mut);margin:0 0 32px;max-width:60ch}
+.lede{font-size:19px;color:var(--mut);margin:0 0 30px;max-width:62ch}
 .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:20px}
-.drop{border:2px dashed var(--line);border-radius:14px;padding:48px 20px;text-align:center;cursor:pointer;transition:.15s;background:var(--card)}
-.drop:hover,.drop.over{border-color:var(--accent);background:color-mix(in oklab,var(--accent) 6%,var(--card))}
+.drop{display:block;border:2px dashed var(--line);border-radius:16px;padding:52px 20px;text-align:center;cursor:pointer;transition:.15s;background:var(--card)}
+.drop:hover,.drop.over{border-color:var(--accent)}
 .drop p{margin:6px 0;color:var(--mut)}
+.drop strong{font-size:19px;color:var(--fg)}
+.row{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:14px}
 .btn{display:inline-block;background:var(--accent);color:var(--accent-fg);border:0;border-radius:9px;padding:11px 18px;font:inherit;font-weight:600;cursor:pointer;text-decoration:none}
 .btn.ghost{background:transparent;color:var(--fg);border:1px solid var(--line)}
-.grid{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(210px,1fr))}
+.btn.small{padding:7px 12px;font-size:14px}
+.grid{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
 table{width:100%;border-collapse:collapse;font-size:15px}
 th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--line)}
 th{color:var(--mut);font-weight:500}
 code,pre{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
-pre{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px;overflow-x:auto;font-size:13.5px}
+pre{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px;overflow-x:auto;font-size:13.5px;white-space:pre-wrap}
 code{font-size:13.5px}
-input[type=email]{font:inherit;padding:11px 12px;border:1px solid var(--line);border-radius:9px;background:var(--card);color:var(--fg);width:100%}
+input[type=email],input[type=text]{font:inherit;padding:11px 12px;border:1px solid var(--line);border-radius:9px;background:var(--card);color:var(--fg);width:100%}
 select{font:inherit;padding:10px 12px;border:1px solid var(--line);border-radius:9px;background:var(--card);color:var(--fg)}
 .muted{color:var(--mut)}
 .big{font-size:38px;font-weight:700;letter-spacing:-.02em}
-/* The checkerboard is what makes transparency legible; without it a cutout on a
-   light page looks like it simply deleted the subject. */
-.checker{background-image:linear-gradient(45deg,#c8c8d4 25%,transparent 25%),linear-gradient(-45deg,#c8c8d4 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#c8c8d4 75%),linear-gradient(-45deg,transparent 75%,#c8c8d4 75%);background-size:18px 18px;background-position:0 0,0 9px,9px -9px,-9px 0}
-footer{margin:80px 0 40px;padding-top:24px;border-top:1px solid var(--line);color:var(--mut);font-size:14px}
-.webring{display:flex;gap:12px;font-size:13px}
-.tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin:24px 0 24px}
+.bar{height:6px;background:var(--line);border-radius:6px;overflow:hidden;margin-top:12px}
+.bar i{display:block;height:100%;width:30%;background:var(--accent);border-radius:6px;animation:slide 1.4s ease-in-out infinite}
+@keyframes slide{0%{margin-left:-30%}100%{margin-left:100%}}
+.para{margin:0 0 16px;display:flex;gap:14px}
+.para time{flex:0 0 58px;color:var(--mut);font-variant-numeric:tabular-nums;font-size:14px;padding-top:2px}
+.note{background:var(--hi);border-radius:10px;padding:12px 14px;margin:0 0 20px}
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin:24px 0}
 .tab{padding:9px 14px;text-decoration:none;color:var(--mut);border-bottom:2px solid transparent;margin-bottom:-1px}
 .tab:hover{color:var(--fg)}
 .tab.on{color:var(--fg);border-bottom-color:var(--accent);font-weight:600}
-.histgrid{display:grid;gap:14px;grid-template-columns:repeat(auto-fill,minmax(200px,1fr))}
-.hist{padding:12px}
-.thumb{width:100%;height:150px;object-fit:contain;border-radius:8px;display:block}
-.thumb.expired{display:flex;align-items:center;justify-content:center;border:1px dashed var(--line);color:var(--mut);font-size:14px}
-.histmeta{display:flex;flex-direction:column;gap:2px;margin-top:10px;font-size:14px}
-.sharebox{display:flex;gap:8px;align-items:center;margin-top:14px;flex-wrap:wrap}
-.ba{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(260px,1fr))}
-.ba figure{margin:0;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px}
-.ba img{width:100%;height:320px;object-fit:contain;border-radius:9px;display:block}
-.ba figcaption{margin-top:10px;font-size:14px;font-weight:600}
-.sharebox input{font:inherit;font-size:14px;padding:9px 10px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--fg);flex:1;min-width:240px}
+footer{margin:80px 0 40px;padding-top:24px;border-top:1px solid var(--line);color:var(--mut);font-size:14px}
+.webring{display:flex;gap:12px;font-size:13px;margin-left:0}
 `;
 
-function page({ title, description, body, canonical }) {
+function page({ title, description, body, canonical, config }) {
+  const site = config?.siteUrl ?? 'https://typeheard.com';
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -75,13 +82,21 @@ function page({ title, description, body, canonical }) {
 <title>${esc(title)}</title>
 <meta name="description" content="${esc(description)}">
 ${canonical ? `<link rel="canonical" href="${esc(canonical)}">` : ''}
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✂️</text></svg>">
+<meta property="og:title" content="${esc(title)}">
+<meta property="og:description" content="${esc(description)}">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/icons/favicon-32.png" sizes="32x32" type="image/png">
+<link rel="icon" href="/favicon.ico" sizes="any">
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon-180x180.png">
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#fbfbf8" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#100f0c" media="(prefers-color-scheme: dark)">
+<meta property="og:image" content="${esc(site)}/icons/icon-512x512.png">
 <style>${STYLE}</style>
-<script data-site="68d4a3fa-7b29-4939-b0cd-ab3289bad021" src="https://crawlproof.com/stats.js" async></script>
 </head>
 <body>
 <header><div class="wrap">
-  <a class="brand" href="/">bg<span>0</span>ne</a>
+  <a class="brand" href="/"><img src="/favicon.svg" alt="" width="30" height="30"><span>type<b>heard</b></span></a>
   <nav>
     <a href="/pricing">Pricing</a>
     <a href="/docs">API</a>
@@ -91,9 +106,9 @@ ${canonical ? `<link rel="canonical" href="${esc(canonical)}">` : ''}
 </div></header>
 <main class="wrap">${body}</main>
 <footer class="wrap">
-  <p>Open source, MIT. Runs on open models you can host yourself.
-  Pay by the image in USDC, or run it on your own box for nothing.</p>
-  <p><a href="https://profullstack.com">Profullstack</a></p>
+  <p>Transcribed by whisper.cpp on our own hardware. Your audio is deleted the moment
+  the words are out; transcripts are yours to delete. Open source, MIT.</p>
+  <p><a href="https://profullstack.com">Profullstack</a> · <a href="${esc(site)}/llms.txt">llms.txt</a></p>
   <nav class="webring" aria-label="Profullstack webring">
     <a href="https://rssamplifier.com/ring/profullstack/previous?from=https%3A%2F%2Ftypeheard.com%2F" rel="prev">&lt;&lt;</a>
     <a href="https://rssamplifier.com/ring/profullstack">Profullstack</a>
@@ -103,123 +118,172 @@ ${canonical ? `<link rel="canonical" href="${esc(canonical)}">` : ''}
 </body></html>`;
 }
 
+const LANGS = [
+  ['auto', 'Detect language'],
+  ['en', 'English'],
+  ['es', 'Spanish'],
+  ['fr', 'French'],
+  ['de', 'German'],
+  ['pt', 'Portuguese'],
+  ['it', 'Italian'],
+  ['nl', 'Dutch'],
+  ['pl', 'Polish'],
+  ['ru', 'Russian'],
+  ['uk', 'Ukrainian'],
+  ['tr', 'Turkish'],
+  ['ar', 'Arabic'],
+  ['hi', 'Hindi'],
+  ['zh', 'Chinese'],
+  ['ja', 'Japanese'],
+  ['ko', 'Korean'],
+];
+
 /* ----------------------------------------------------------------- landing -- */
 
-export function Landing({ config }) {
+export function Landing({ config, user, balance }) {
+  const free = Math.round(config.pricing.previewSeconds / 60);
+  const cheapest = config.pricing.topups[0];
+  const perHour = ((cheapest.cents / cheapest.credits) * 60) / 100;
   return page({
-    title: 'typeheard — BG, gone',
-    description:
-      'Remove image backgrounds with open models. Free previews, pay by the image for full resolution, or self-host the whole thing.',
+    config,
+    title: 'typeheard: drop a recording, get the transcript',
+    description: `Transcribe interviews, lectures, podcasts and voice memos you already have. The first ${free} minutes of any file are free; after that about $${perHour.toFixed(2)} an hour, no subscription.`,
     canonical: `${config.siteUrl}/`,
     body: `
-<h1>BG, gone.</h1>
-<p class="lede">Drop an image, get it back without its background. Previews are free and
-unlimited. Full resolution costs ${config.pricing.hdCents}&cent; an image, paid in USDC,
-with no subscription and no expiring credits. The whole thing is MIT licensed, so you can
-also just run it yourself.</p>
+<h1>Drop a recording.<br>Get what was said.</h1>
+<p class="lede">Interviews, lectures, podcasts, voice memos: the files you already have.
+The first ${free} minutes of anything are free, no account. The whole file is about
+$${perHour.toFixed(2)} an hour, paid once, with no subscription and minutes that never expire.</p>
 
-<div id="drop" class="drop">
-  <p><strong>Drop an image here</strong></p>
-  <p>or click to choose &middot; PNG, JPEG, WebP</p>
-  <input id="file" type="file" accept="image/*" hidden>
+<label class="drop" id="drop" for="file">
+  <strong>Drop audio or video here</strong>
+  <p>mp3, m4a, wav, ogg, flac, mp4, mov, webm… up to ${Math.round(config.uploads.maxBytes / 1073741824)} GB and ${config.uploads.maxMinutes / 60} hours</p>
+  <p class="muted">or click to choose a file</p>
+</label>
+<input id="file" type="file" accept="audio/*,video/*" hidden>
+<div class="row">
+  <select id="language" aria-label="Language">${LANGS.map(([v, l]) => `<option value="${v}">${l}</option>`).join('')}</select>
+  <span class="muted">${
+    user
+      ? `${balance.toLocaleString()} minutes on your account. Files are transcribed in full.`
+      : `Not signed in: you get the first ${free} minutes. <a href="/signup">Sign up</a> to do whole files.`
+  }</span>
+</div>
+<div id="status" class="card" style="display:none;margin-top:20px"></div>
+
+<h2>What you get</h2>
+<div class="grid">
+  <div class="card"><strong>Plain text</strong><p class="muted">Paragraphs, ready to paste into a doc or quote in a thesis.</p></div>
+  <div class="card"><strong>Timestamps</strong><p class="muted">Markdown with [mm:ss] on every paragraph, so a quote can be found again.</p></div>
+  <div class="card"><strong>Subtitles</strong><p class="muted">SRT and VTT for YouTube, Premiere, Resolve or any player.</p></div>
+  <div class="card"><strong>An API</strong><p class="muted">One POST. Keys for people, x402 per call for agents. <a href="/docs">Docs</a>.</p></div>
 </div>
 
-<div id="status" class="muted" style="margin:16px 0;min-height:24px"></div>
-
-<div id="result" style="display:none">
-  <div class="grid">
-    <div><h2 style="margin-top:0">Before</h2><img id="before" style="max-width:100%;border-radius:10px"></div>
-    <div><h2 style="margin-top:0">After</h2><img id="after" class="checker" style="max-width:100%;border-radius:10px"></div>
-  </div>
-  <p style="margin-top:16px">
-    <a id="dl" class="btn" download="cutout.png">Download PNG</a>
-    <span id="tier" class="muted" style="margin-left:12px"></span>
-  </p>
-  <div id="sharebox" class="sharebox" style="display:none">
-    <input id="shareurl" readonly onclick="this.select()">
-    <button id="copy" class="btn ghost">Copy link</button>
-    <a id="open" class="btn ghost" target="_blank" rel="noopener">Open</a>
-    <span id="shareexp" class="muted"></span>
-  </div>
-</div>
-
-<h2>Why this exists</h2>
-<p class="muted">Background removal is a solved problem with excellent open models behind
-it, and it is still mostly sold as a subscription with credits that expire. This is the
-same capability with the pricing turned back into what it is: a few cents of compute.</p>
-
-<div class="grid" style="margin-top:24px">
-  <div class="card"><strong>Free previews</strong><p class="muted" style="margin:6px 0 0">
-  Capped at ${config.pricing.previewMaxEdge}px on the long edge. No account, no card.</p></div>
-  <div class="card"><strong>${config.pricing.hdCents}&cent; full resolution</strong><p class="muted" style="margin:6px 0 0">
-  Credits never expire. No subscription to cancel.</p></div>
-  <div class="card"><strong>Agents pay per call</strong><p class="muted" style="margin:6px 0 0">
-  x402 on the API. No signup, no key, just a paid request.</p></div>
-  <div class="card"><strong>Self-host it</strong><p class="muted" style="margin:6px 0 0">
-  MIT, open weights, one container. <a href="/docs">Docs</a>.</p></div>
-</div>
+<h2>Why it is cheap</h2>
+<p class="muted">The transcription runs on <a href="https://github.com/ggml-org/whisper.cpp">whisper.cpp</a>
+on our own servers rather than a hosted AI API, so a minute costs us very little and you pay
+for what you upload instead of a monthly plan sized for someone else.</p>
 
 <script>
-const drop=document.getElementById('drop'),input=document.getElementById('file'),
-      status=document.getElementById('status'),result=document.getElementById('result'),
-      before=document.getElementById('before'),after=document.getElementById('after'),
-      dl=document.getElementById('dl'),tierEl=document.getElementById('tier');
-
-drop.addEventListener('click',()=>input.click());
-drop.addEventListener('dragover',e=>{e.preventDefault();drop.classList.add('over')});
-drop.addEventListener('dragleave',()=>drop.classList.remove('over'));
-drop.addEventListener('drop',e=>{e.preventDefault();drop.classList.remove('over');
-  if(e.dataTransfer.files[0])go(e.dataTransfer.files[0])});
-input.addEventListener('change',()=>{if(input.files[0])go(input.files[0])});
-
-async function go(file){
-  if(!file.type.startsWith('image/')){status.textContent='That is not an image.';return}
-  before.src=URL.createObjectURL(file);
-  status.textContent='Working…';
-  result.style.display='none';
-  const body=new FormData();
-  body.append('file',file);
-  body.append('tier','auto');
-  try{
-    const res=await fetch('/api/cutout',{method:'POST',body});
-    if(!res.ok){
-      // 402 is the interesting failure: it means it worked and costs money.
-      const j=await res.json().catch(()=>({}));
-      status.innerHTML = res.status===402
-        ? 'Out of credits. <a href="/pricing">Top up</a> to keep going at full resolution.'
-        : 'Failed: '+(j.error||res.status);
-      return;
-    }
-    const blob=await res.blob();
-    after.src=URL.createObjectURL(blob);
-    dl.href=after.src;
-    const tier=res.headers.get('x-cutout-tier'), ms=res.headers.get('x-cutout-ms');
-    tierEl.textContent=(tier==='hd'?'Full resolution':'Preview')+' · '+ms+'ms · '+res.headers.get('x-cutout-model');
-
-    // Every cutout gets a link, free or paid. It is the cheapest advertising here.
-    const shareUrl=res.headers.get('x-share-url');
-    const box=document.getElementById('sharebox');
-    if(shareUrl){
-      document.getElementById('shareurl').value=shareUrl;
-      document.getElementById('open').href=shareUrl;
-      const exp=res.headers.get('x-share-expires');
-      document.getElementById('shareexp').textContent = exp
-        ? 'expires '+new Date(exp).toISOString().slice(0,10) : '';
-      box.style.display='';
-    } else { box.style.display='none'; }
-
-    status.textContent='';
-    result.style.display='';
-  }catch(err){status.textContent='Failed: '+err.message}
+const drop=document.getElementById('drop'),input=document.getElementById('file'),status=document.getElementById('status');
+['dragenter','dragover'].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.add('over')}));
+['dragleave','drop'].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.remove('over')}));
+drop.addEventListener('drop',ev=>{if(ev.dataTransfer.files[0])send(ev.dataTransfer.files[0])});
+input.addEventListener('change',()=>{if(input.files[0])send(input.files[0])});
+function show(h){status.style.display='block';status.innerHTML=h}
+function send(file){
+  const body=new FormData();body.append('file',file);body.append('language',document.getElementById('language').value);
+  const xhr=new XMLHttpRequest();xhr.open('POST','/api/v1/transcripts');
+  xhr.upload.onprogress=e=>{if(e.lengthComputable)show('Uploading '+file.name+'… '+Math.round(e.loaded/e.total*100)+'%<div class="bar"><i></i></div>')};
+  xhr.onload=()=>{let j={};try{j=JSON.parse(xhr.responseText)}catch{}
+    if(xhr.status===202&&j.url){location.href=j.url;return}
+    show('<strong>That did not work.</strong> '+(j.error||('HTTP '+xhr.status))+(xhr.status===402?' <a href="/pricing">Top up</a>':''))};
+  xhr.onerror=()=>show('Upload failed. Check your connection and try again.');
+  show('Uploading '+file.name+'…<div class="bar"><i></i></div>');xhr.send(body);
+}
+</script>`,
+  });
 }
 
-document.getElementById('copy').addEventListener('click',async()=>{
-  const btn=document.getElementById('copy');
-  try{await navigator.clipboard.writeText(document.getElementById('shareurl').value);btn.textContent='Copied'}
-  catch{document.getElementById('shareurl').select();btn.textContent='Press Ctrl+C'}
-  setTimeout(()=>{btn.textContent='Copy link'},1500);
-});
-</script>`,
+/* -------------------------------------------------------------- transcript -- */
+
+export function TranscriptPage({ row, view, config, mine }) {
+  const title = row.title || row.filename || 'Transcript';
+  const partial =
+    row.status === 'done' && row.transcribed_sec && row.transcribed_sec < row.duration_sec - 1;
+  const segments = row.segments ?? [];
+  // Paragraphs on a pause, the same rule as the txt download, so the page and the file agree.
+  const paras = [];
+  for (const s of segments) {
+    const last = paras[paras.length - 1];
+    if (!last || s.start - last.end > 2 || last.text.length > 600)
+      paras.push({ start: s.start, end: s.end, text: s.text });
+    else {
+      last.end = s.end;
+      last.text += ` ${s.text}`;
+    }
+  }
+  const downloads = Object.keys(view.downloads ?? {})
+    .map(
+      (f) =>
+        `<a class="btn ghost small" href="/api/v1/transcripts/${row.id}/${f}?download">${f.toUpperCase()}</a>`,
+    )
+    .join(' ');
+
+  let body;
+  if (row.status === 'done') {
+    body = `
+${
+  partial
+    ? `<p class="note">This is the free preview: the first ${mins(row.transcribed_sec)} of ${mins(row.duration_sec)}.
+<a href="/signup">Sign up</a> and <a href="/pricing">add minutes</a> to transcribe the whole file
+(${Math.ceil(row.duration_sec / 60)} minutes).</p>`
+    : ''
+}
+<div class="row" style="margin:0 0 24px"><button class="btn small" id="copy">Copy text</button> ${downloads}</div>
+<article id="text">${
+      paras.length
+        ? paras
+            .map(
+              (p) => `<p class="para"><time>${mins(p.start)}</time><span>${esc(p.text)}</span></p>`,
+            )
+            .join('')
+        : '<p class="muted">No speech was found in this recording.</p>'
+    }</article>
+<script>
+document.getElementById('copy').addEventListener('click',async e=>{
+  await navigator.clipboard.writeText([...document.querySelectorAll('#text .para span')].map(s=>s.textContent).join('\\n\\n'));
+  e.target.textContent='Copied';setTimeout(()=>e.target.textContent='Copy text',1500)});
+</script>`;
+  } else if (row.status === 'failed') {
+    body = `<div class="card"><strong>That one failed.</strong> <span class="muted">${esc(row.error ?? '')}</span>
+<p class="muted">Any minutes it used were put back on your account.</p><p><a class="btn" href="/">Try another file</a></p></div>`;
+  } else {
+    body = `<div class="card" id="wait"><strong>${row.status === 'running' ? 'Listening…' : 'In the queue…'}</strong>
+<p class="muted" id="waitmsg">${view.queue_position ? `${view.queue_position} ahead of you. ` : ''}A ${mins(row.tier === 'preview' ? Math.min(row.duration_sec, config.pricing.previewSeconds) : row.duration_sec)} recording usually takes a fraction of that. This page refreshes itself; you can also bookmark it and come back.</p>
+<div class="bar"><i></i></div></div>
+<script>
+setInterval(async()=>{const r=await fetch('/api/v1/transcripts/${row.id}');const j=await r.json().catch(()=>({}));
+if(j.status==='done'||j.status==='failed')location.reload();
+else if(j.queue_position!==undefined)document.getElementById('waitmsg').firstChild.textContent=j.queue_position+' ahead of you. '},3000);
+</script>`;
+  }
+
+  return page({
+    config,
+    title: `${title} - typeheard`,
+    description: 'A transcript on typeheard.',
+    body: `
+<h1 style="font-size:clamp(26px,4vw,36px)">${esc(title)}</h1>
+<p class="muted">${mins(row.duration_sec)} recording · ${esc(row.language === 'auto' ? 'language detected' : row.language)} ·
+kept until ${new Date(row.expires_at).toISOString().slice(0, 10)}${mine ? ` · <a href="#" id="del">delete</a>` : ''}</p>
+${body}
+${
+  mine
+    ? `<script>document.getElementById('del').addEventListener('click',async e=>{e.preventDefault();
+if(!confirm('Delete this transcript for good?'))return;await fetch('/api/v1/transcripts/${row.id}',{method:'DELETE'});location.href='/account/history'});</script>`
+    : ''
+}`,
   });
 }
 
@@ -230,31 +294,20 @@ export function Pricing({ config }) {
     .map(
       (t) => `<tr>
         <td><strong>$${(t.cents / 100).toFixed(2)}</strong></td>
-        <td>${t.credits.toLocaleString()} images</td>
-        <td class="muted">$${((t.cents / t.credits) / 100).toFixed(4)} each</td>
+        <td>${t.credits.toLocaleString()} minutes <span class="muted">(${(t.credits / 60).toFixed(0)} hours)</span></td>
+        <td class="muted">$${((t.cents / t.credits) * 0.6).toFixed(2)} an hour</td>
         <td><button class="btn" data-cents="${t.cents}">Buy</button></td>
       </tr>`,
     )
     .join('');
-
-  // Only chains this business actually holds a wallet for. Offering one it does not
-  // is a button that fails at the moment somebody presses it.
   const LABELS = {
     USDC_POL: 'USDC on Polygon',
     USDC_SOL: 'USDC on Solana',
     USDC_ETH: 'USDC on Ethereum',
-    USDT_POL: 'USDT on Polygon',
-    USDT_SOL: 'USDT on Solana',
-    USDT_ETH: 'USDT on Ethereum',
     SOL: 'Solana',
     POL: 'Polygon',
     ETH: 'Ethereum',
     BTC: 'Bitcoin',
-    BCH: 'Bitcoin Cash',
-    DOGE: 'Dogecoin',
-    XRP: 'XRP',
-    ADA: 'Cardano',
-    BNB: 'BNB',
   };
   const options = config.coinpay.chains
     .map(
@@ -262,58 +315,51 @@ export function Pricing({ config }) {
         `<option value="${ch}"${ch === config.coinpay.defaultChain ? ' selected' : ''}>${esc(LABELS[ch] ?? ch)}</option>`,
     )
     .join('');
+  const free = Math.round(config.pricing.previewSeconds / 60);
 
   return page({
+    config,
     title: 'Pricing - typeheard',
-    description: 'Pay by the image. Credits never expire and there is no subscription.',
+    description: 'Pay by the minute of audio. No subscription, minutes never expire.',
     canonical: `${config.siteUrl}/pricing`,
     body: `
-<h1>Pay by the image</h1>
-<p class="lede">One credit is one full-resolution cutout. Credits never expire, there is
-nothing to cancel, and previews stay free whether you have credits or not.</p>
+<h1>Pay for the minutes you upload</h1>
+<p class="lede">One minute of credit transcribes one minute of audio, rounded up per file.
+No subscription, nothing to cancel, and minutes never expire. The first ${free} minutes of
+any file stay free whether you have credit or not.</p>
 
 <div class="card">
-<p style="margin:0 0 14px">
-  <label for="chain" class="muted">Pay with</label><br>
-  <select id="chain" style="margin-top:6px">${options}</select>
-</p>
+<p style="margin:0 0 14px"><label for="chain" class="muted">Pay with</label><br>
+<select id="chain" style="margin-top:6px">${options}</select></p>
 <table>
-<tr><th>Top up</th><th>Credits</th><th>Per image</th><th></th></tr>
+<tr><th>Top up</th><th>Minutes</th><th>Works out at</th><th></th></tr>
 ${rows}
 </table>
 <p id="buyerr" class="muted" style="margin:14px 0 0"></p>
 </div>
 
-<h2>Agents</h2>
-<p class="muted">An agent does not need any of the above. <code>POST /api/cutout</code>
-answers <code>402</code> with an x402 offer and settles in USDC per call, so there is no
-account, no key and no card. See the <a href="/docs">API docs</a>.</p>
+<h2>Compared with a monthly plan</h2>
+<p class="muted">Subscription transcription tools charge every month whether you have
+twelve thesis interviews or none. Here a five-dollar top-up is five hours of audio and it is
+still there next semester.</p>
 
-<h2>Or pay nothing</h2>
-<p class="muted">The repository is MIT and the models are permissively licensed
-(BiRefNet is MIT, U&#8209;2&#8209;Net is Apache&#8209;2.0). One container runs the whole
-thing. We are selling the convenience, not the capability.</p>
+<h2>Agents</h2>
+<p class="muted">An agent needs none of the above. <code>POST /api/v1/transcripts</code> answers
+<code>402</code> with an x402 offer, $${(config.x402.priceCents / 100).toFixed(2)} for a file up to
+${config.x402.maxMinutes} minutes, settled in USDC with no account. See the <a href="/docs">API docs</a>.</p>
 
 <script>
 const err=document.getElementById('buyerr');
 document.querySelectorAll('button[data-cents]').forEach(b=>b.addEventListener('click',async()=>{
-  const was=b.textContent;
-  b.disabled=true;b.textContent='Starting…';err.textContent='';
-  try{
-    const body=new FormData();
-    body.append('cents',b.dataset.cents);
-    body.append('chain',document.getElementById('chain').value);
+  const was=b.textContent;b.disabled=true;b.textContent='Starting…';err.textContent='';
+  try{const body=new FormData();body.append('cents',b.dataset.cents);body.append('chain',document.getElementById('chain').value);
     const res=await fetch('/api/topup',{method:'POST',body});
     if(res.status===401){location.href='/signin';return}
     const j=await res.json().catch(()=>({}));
     if(j.checkout_url){location.href=j.checkout_url;return}
-    // Say what happened. A button that silently does nothing is the bug this replaces.
     err.textContent=(j.error||'could not start checkout')+(j.detail?' - '+j.detail:'');
-  }catch(e){
-    err.textContent='could not start checkout: '+e.message;
-  }finally{
-    b.disabled=false;b.textContent=was;
-  }
+  }catch(e){err.textContent='could not start checkout: '+e.message}
+  finally{b.disabled=false;b.textContent=was}
 }));
 </script>`,
   });
@@ -324,57 +370,56 @@ document.querySelectorAll('button[data-cents]').forEach(b=>b.addEventListener('c
 export function Docs({ config }) {
   const base = config.siteUrl;
   return page({
-    title: 'API — typeheard',
-    description: 'One endpoint. Pay with credits, an API key, or x402 per call.',
+    config,
+    title: 'API - typeheard',
+    description:
+      'Transcribe audio and video over HTTP, from the command line, or from an AI agent over MCP.',
     canonical: `${base}/docs`,
     body: `
 <h1>API</h1>
-<p class="lede">One endpoint, three ways to pay for it.</p>
+<p class="lede">One upload, one id, five formats. Keys for people, x402 for agents,
+and the same thing from a terminal or an MCP client.</p>
 
-<h2>Free preview</h2>
-<pre><code>curl -F file=@photo.jpg ${base}/api/cutout &gt; cutout.png</code></pre>
-<p class="muted">No account. Capped at ${config.pricing.previewMaxEdge}px on the long edge
-and rate limited; over the limit you get a 402 with an offer rather than a 429.</p>
+<h2>Upload</h2>
+<pre>curl -F file=@interview.m4a -F language=auto \\
+  -H "Authorization: Bearer $TYPEHEARD_API_KEY" \\
+  ${base}/api/v1/transcripts</pre>
+<p class="muted">Answers <code>202</code> with <code>{ id, status, status_url, url }</code>.
+Without a key you get the first ${Math.round(config.pricing.previewSeconds / 60)} minutes free.
+<code>tier=full</code> refuses with <code>402</code> rather than quietly giving you a preview;
+<code>tier=preview</code> never spends.</p>
 
-<h2>Full resolution, with a key</h2>
-<pre><code>curl -H "authorization: Bearer bg_live_…" \\
-     -F file=@photo.jpg -F tier=hd \\
-     ${base}/api/cutout &gt; cutout.png</code></pre>
-<p class="muted">Spends one credit. <code>x-credits-remaining</code> comes back on every
-response. With no credits left you get <code>402</code> and the top-up URL, never a
-silently downgraded image.</p>
+<h2>Wait, then read</h2>
+<pre>curl ${base}/api/v1/transcripts/ID          # status: queued, running, done, failed
+curl ${base}/api/v1/transcripts/ID/txt      # also md, srt, vtt, json</pre>
 
-<h2>Full resolution, as an agent</h2>
-<pre><code>coinpay x402 pay ${base}/api/cutout
-curl -H "x-crawl-pass: $PASS" -F file=@photo.jpg -F tier=hd ${base}/api/cutout</code></pre>
-<p class="muted">No account and no key. The 402 carries the offer, CoinPay settles it
-straight to the merchant, and the pass covers ${config.x402.passMinutes} minutes.</p>
+<h2>Command line</h2>
+<pre>npx -y @profullstack/typeheard interview.m4a            # prints the text
+npx -y @profullstack/typeheard talk.mp4 --format srt > talk.srt
+npx -y @profullstack/typeheard login                    # saves an API key
+npx -y @profullstack/typeheard tui                      # your transcripts, in the terminal</pre>
 
-<h2>Response headers</h2>
-<table class="card">
-<tr><th>Header</th><th>Meaning</th></tr>
-<tr><td><code>x-cutout-tier</code></td><td><code>preview</code> or <code>hd</code></td></tr>
-<tr><td><code>x-cutout-model</code></td><td>which model answered</td></tr>
-<tr><td><code>x-cutout-ms</code></td><td>end to end milliseconds</td></tr>
-<tr><td><code>x-credits-remaining</code></td><td>after this call, when credits were spent</td></tr>
-</table>
+<h2>MCP</h2>
+<pre>{ "mcpServers": { "typeheard": { "command": "npx", "args": ["-y", "@profullstack/typeheard-mcp"],
+  "env": { "TYPEHEARD_API_KEY": "th_…" } } } }</pre>
+<p class="muted">Tools: <code>transcribe_file</code>, <code>get_transcript</code>, <code>list_transcripts</code>.</p>
 
-<h2>Self-hosting</h2>
-<pre><code>git clone https://github.com/profullstack/typeheard.com
-cd typeheard.com &amp;&amp; docker compose up</code></pre>
-<p class="muted">Set <code>DATABASE_URL</code> and you have the whole thing. Leave the
-CoinPay variables unset and payments are simply off, which is the right configuration
-for a private instance.</p>`,
+<h2>Agents without an account</h2>
+<p class="muted">Send the upload with no key. A metered caller over the free allowance gets
+<code>402</code> with an x402 offer; pay it and repeat the request with the payment header.
+One payment covers a file up to ${config.x402.maxMinutes} minutes.</p>
+
+<h2>Keys</h2>
+<p class="muted">Make one at <a href="/account/keys">Account &rarr; API keys</a>. It is shown once.</p>`,
   });
 }
 
 /* ----------------------------------------------------------------- account -- */
 
-/** One tab bar, so the three account pages cannot drift apart. */
 function AccountNav(active) {
   const tabs = [
-    ['/account', 'Credits'],
-    ['/account/history', 'History'],
+    ['/account', 'Minutes'],
+    ['/account/history', 'Transcripts'],
     ['/account/keys', 'API keys'],
   ];
   return `<nav class="tabs">${tabs
@@ -385,257 +430,161 @@ function AccountNav(active) {
     .join('')}</nav>`;
 }
 
-export function Account({ user, balance, ledger, config }) {
+const PASSKEY_JS = `<script src="https://unpkg.com/@simplewebauthn/browser@13/dist/bundle/index.umd.min.js"></script>`;
+
+export function Account({ user, balance, ledger, passkeys, config }) {
   const rows = ledger
     .map(
-      (h) =>
-        `<tr><td>${h.delta > 0 ? '+' : ''}${h.delta}</td><td>${esc(h.reason)}</td>
+      (h) => `<tr><td>${h.delta > 0 ? '+' : ''}${h.delta}</td><td>${esc(h.reason)}</td>
          <td class="muted">${new Date(h.created_at).toISOString().slice(0, 16).replace('T', ' ')}</td></tr>`,
     )
     .join('');
   return page({
+    config,
     title: 'Account - typeheard',
-    description: 'Your credits and billing history.',
+    description: 'Your minutes, transcripts and keys.',
     body: `
 <h1>Account</h1>
 <p class="lede">${esc(user.email)}</p>
 ${AccountNav('/account')}
-
 <div class="card">
-  <div class="muted">Credits</div>
+  <div class="muted">Minutes</div>
   <div class="big">${balance.toLocaleString()}</div>
-  <p class="muted" style="margin:4px 0 0">One credit, one full-resolution image. They do not expire.</p>
-  <p style="margin:14px 0 0"><a class="btn" href="/pricing">Top up</a></p>
+  <p class="muted" style="margin:4px 0 0">One minute transcribes one minute of audio. They do not expire.</p>
+  <p style="margin:14px 0 0"><a class="btn" href="/pricing">Top up</a> <a class="btn ghost" href="/">Transcribe a file</a></p>
 </div>
 
-<h2>Credit history</h2>
+<h2>Passkeys</h2>
+<div class="card">
+  <p class="muted" style="margin:0 0 12px">${passkeys.length ? `${passkeys.length} passkey${passkeys.length === 1 ? '' : 's'} on this account.` : 'None yet. A passkey signs you in with your fingerprint or face instead of an emailed link.'}</p>
+  <button class="btn small" id="addkey">Add a passkey</button> <span id="keymsg" class="muted"></span>
+</div>
+
+<h2>History</h2>
 <div class="card">
 ${ledger.length ? `<table><tr><th>Change</th><th>Reason</th><th>When</th></tr>${rows}</table>` : '<p class="muted" style="margin:0">Nothing yet.</p>'}
 </div>
-
-<p style="margin-top:32px"><form method="post" action="/auth/signout"><button class="btn ghost">Sign out</button></form></p>`,
+<form method="post" action="/auth/signout" style="margin-top:32px"><button class="btn ghost">Sign out</button></form>
+${PASSKEY_JS}
+<script>
+document.getElementById('addkey').addEventListener('click',async()=>{const msg=document.getElementById('keymsg');
+  try{const opts=await (await fetch('/auth/passkey/register/options',{method:'POST'})).json();
+    const att=await SimpleWebAuthnBrowser.startRegistration({optionsJSON:opts});
+    const r=await fetch('/auth/passkey/register',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(att)});
+    const j=await r.json();msg.textContent=j.ok?'Added. Next time, sign in with it.':(j.error||'could not add it');
+  }catch(e){msg.textContent=e.message}});
+</script>`,
   });
 }
 
-/**
- * Everything this account has run.
- *
- * A row survives its image. When a result has expired the entry stays and says so,
- * because a history that silently drops its oldest entries is worse than none: it
- * looks complete.
- */
 export function History({ user, rows, config }) {
-  const cards = rows
-    .map((r) => {
-      const when = new Date(r.created_at).toISOString().slice(0, 16).replace('T', ' ');
-      const dims = r.width && r.height ? `${r.width}&times;${r.height}` : '';
-      const body = r.share_id
-        ? `<a href="/c/${r.share_id}"><img class="checker thumb" src="/c/${r.share_id}/image.png" alt="cutout" loading="lazy"></a>`
-        : '<div class="thumb expired"><span>image expired</span></div>';
-      return `<div class="card hist">
-        ${body}
-        <div class="histmeta">
-          <strong>${r.tier === 'hd' ? 'Full resolution' : 'Preview'}</strong>
-          <span class="muted">${dims}</span>
-          <span class="muted">${esc(r.model ?? '')}</span>
-          <span class="muted">${when}</span>
-          ${r.share_id ? `<a href="/c/${r.share_id}">Share link</a>` : ''}
-        </div>
-      </div>`;
-    })
+  const list = rows
+    .map(
+      (r) => `<tr>
+        <td><a href="/t/${r.id}">${esc(r.title || r.filename || 'Transcript')}</a></td>
+        <td class="muted">${mins(r.duration_sec)}${r.tier === 'preview' ? ' (preview)' : ''}</td>
+        <td class="muted">${esc(r.status)}</td>
+        <td class="muted">${new Date(r.created_at).toISOString().slice(0, 16).replace('T', ' ')}</td></tr>`,
+    )
     .join('');
   return page({
-    title: 'History - typeheard',
-    description: 'Every cutout on this account.',
+    config,
+    title: 'Transcripts - typeheard',
+    description: 'Every transcript on this account.',
     body: `
-<h1>History</h1>
+<h1>Transcripts</h1>
 <p class="lede">${esc(user.email)}</p>
 ${AccountNav('/account/history')}
-
-${
-  rows.length
-    ? `<p class="muted">Images are kept for ${config.shares.ttlDays} days. The record of a
-       cutout stays after its image has gone.</p>
-       <div class="histgrid">${cards}</div>`
-    : '<div class="card"><p class="muted" style="margin:0">Nothing yet. <a href="/">Run one</a>.</p></div>'
-}`,
+${rows.length ? `<div class="card"><table><tr><th>File</th><th>Length</th><th>Status</th><th>When</th></tr>${list}</table></div>` : '<div class="card"><p class="muted" style="margin:0">Nothing yet. <a href="/">Transcribe a file</a>.</p></div>'}`,
   });
 }
 
 export function Keys({ user, keys, config }) {
   const keyRows = keys
     .map(
-      (k) =>
-        `<tr><td><code>${esc(k.prefix)}&hellip;</code></td><td class="muted">${esc(k.name)}</td>
+      (
+        k,
+      ) => `<tr><td><code>${esc(k.prefix)}&hellip;</code></td><td class="muted">${esc(k.name)}</td>
          <td class="muted">${k.last_used_at ? new Date(k.last_used_at).toISOString().slice(0, 10) : 'never used'}</td></tr>`,
     )
     .join('');
   return page({
+    config,
     title: 'API keys - typeheard',
-    description: 'Keys for calling the API from your own code.',
+    description: 'Keys for the CLI, the MCP server and your own code.',
     body: `
 <h1>API keys</h1>
 <p class="lede">${esc(user.email)}</p>
 ${AccountNav('/account/keys')}
-
 <div class="card">
-  ${keys.length ? `<table><tr><th>Key</th><th>Name</th><th>Last used</th></tr>${keyRows}</table>` : '<p class="muted" style="margin:0">No keys yet.</p>'}
-  <p style="margin:14px 0 0"><button id="mint" class="btn ghost">Create a key</button></p>
-  <p id="minted" class="muted" style="margin:10px 0 0"></p>
+${keys.length ? `<table><tr><th>Key</th><th>Name</th><th>Last used</th></tr>${keyRows}</table>` : '<p class="muted" style="margin:0 0 12px">No keys yet.</p>'}
+<p style="margin:14px 0 0"><button class="btn" id="mk">Make a key</button></p>
+<pre id="out" style="display:none"></pre>
 </div>
-
-<p class="muted">A key spends credits the same way the website does. See the
-<a href="/docs">API docs</a>.</p>
-
 <script>
-document.getElementById('mint').addEventListener('click',async()=>{
-  const res=await fetch('/account/keys',{method:'POST'});
-  const j=await res.json();
-  document.getElementById('minted').innerHTML = j.key
-    ? 'Copy this now, it is not shown again: <code>'+j.key+'</code>'
-    : (j.error||'failed');
-});
+document.getElementById('mk').addEventListener('click',async()=>{const r=await fetch('/account/keys',{method:'POST'});const j=await r.json();
+const o=document.getElementById('out');o.style.display='block';o.textContent=j.key?j.key+'\\n\\nShown once. Put it in TYPEHEARD_API_KEY.':(j.error||'failed')});
 </script>`,
-  });
-}
-
-/* ------------------------------------------------------------------ sharing -- */
-
-/**
- * What to say when there is no "before".
- *
- * Never guesses. This page used to tell every sourceless share that its original
- * had been too large, which was false for everything made before originals were
- * kept at all, and pointed the reader at a size limit that had nothing to do with
- * it. A reason we did not record is a reason we do not state.
- */
-function noBeforeReason(share) {
-  if (share.source_omitted_reason === 'too_large') {
-    return 'The original was too large to keep, so only the result was saved.';
-  }
-  if (share.source_omitted_reason === 'legacy') {
-    return 'This one was made before originals were kept, so only the result was saved. Run the image again to get a before and after.';
-  }
-  return 'Only the result was saved for this one.';
-}
-
-export function SharePage({ share, config }) {
-  const expires = new Date(share.expires_at);
-  const days = Math.max(0, Math.ceil((expires - Date.now()) / 86_400_000));
-  const url = `${config.siteUrl}/c/${share.id}`;
-  const outDims = share.width && share.height ? `${share.width}&times;${share.height}` : '';
-  const srcDims =
-    share.source_width && share.source_height
-      ? `${share.source_width}&times;${share.source_height}`
-      : '';
-
-  /*
-   * Before and after, side by side.
-   *
-   * The "before" is what makes a shared cutout legible to somebody who never saw the
-   * original -- on its own, a subject on a checkerboard is just a picture. It is
-   * missing only when the upload was too large to keep, in which case the page shows
-   * the result alone rather than an apology.
-   */
-  const pair = share.has_source
-    ? `<div class="ba">
-         <figure>
-           <img src="/c/${share.id}/original" alt="before">
-           <figcaption>Before${srcDims ? ` <span class="muted">${srcDims}</span>` : ''}</figcaption>
-         </figure>
-         <figure>
-           <img class="checker" src="/c/${share.id}/image.png" alt="after">
-           <figcaption>After${outDims ? ` <span class="muted">${outDims}</span>` : ''}</figcaption>
-         </figure>
-       </div>`
-    : `<div class="card" style="text-align:center">
-         <img class="checker" src="/c/${share.id}/image.png" alt="cutout"
-              style="max-width:100%;border-radius:10px">
-         <p class="muted" style="margin:10px 0 0">${esc(noBeforeReason(share))}</p>
-       </div>`;
-
-  return page({
-    title: 'A cutout - typeheard',
-    description: 'A background removed with typeheard.',
-    // No canonical and no indexing: the id is the only thing protecting the images.
-    body: `
-<h1>Before and after</h1>
-<p class="lede">Background removed with <a href="/">typeheard</a>. This link works for
-${days} more day${days === 1 ? '' : 's'}.</p>
-
-${pair}
-
-<p style="margin-top:18px">
-  <a class="btn" href="/c/${share.id}/image.png" download="cutout.png">Download PNG</a>
-  <button class="btn ghost" id="copy" data-url="${esc(url)}">Copy link</button>
-  <span class="muted" style="margin-left:10px">${esc(share.model ?? '')}</span>
-</p>
-
-<div class="card" style="margin-top:32px">
-  <strong>Made with typeheard</strong>
-  <p class="muted" style="margin:6px 0 12px">Open source background removal. Previews are
-  free and unlimited, full resolution is ${config.pricing.hdCents}&cent; an image, and you
-  can run the whole thing yourself.</p>
-  <a class="btn" href="/">Try it on your own image</a>
-</div>
-
-<script>
-document.getElementById('copy').addEventListener('click',async(e)=>{
-  try{await navigator.clipboard.writeText(e.target.dataset.url);e.target.textContent='Copied'}
-  catch{e.target.textContent='Copy failed'}
-  setTimeout(()=>{e.target.textContent='Copy link'},1500);
-});
-</script>`,
-  });
-}
-
-export function Gone({ config }) {
-  return page({
-    title: 'Link expired - typeheard',
-    description: 'That shared cutout has expired.',
-    body: `
-<h1>That link has expired</h1>
-<p class="lede">Shared results are kept for ${config.shares.ttlDays} days and then
-deleted. That is deliberate: they are your images, not ours.</p>
-<p><a class="btn" href="/">Make a new one</a></p>`,
   });
 }
 
 /* -------------------------------------------------------------------- auth -- */
 
-export function SignIn({ error }) {
+export function SignIn({ config, error, signup = false }) {
   return page({
-    title: 'Sign in — typeheard',
-    description: 'Sign in with an emailed link.',
+    config,
+    title: `${signup ? 'Sign up' : 'Sign in'} - typeheard`,
+    description: 'Sign in with an emailed link or a passkey. No passwords.',
     body: `
-<h1>Sign in</h1>
-<p class="lede">We email you a link. There is no password to choose, forget or leak, and
-the same link makes the account if you do not have one yet.</p>
-${error ? `<p class="card" style="border-color:#c33">${esc(error)}</p>` : ''}
-<form method="post" action="/auth/link" class="card" style="max-width:420px">
+<h1>${signup ? 'Make an account' : 'Sign in'}</h1>
+<p class="lede">${signup ? 'Put in your email and we will send a link. Clicking it makes the account; there is no password to choose.' : 'We will email you a link. If you added a passkey, use that instead.'}</p>
+${error ? `<p class="note">${esc(error)}</p>` : ''}
+<form class="card" method="post" action="/auth/link" style="max-width:460px">
   <label for="email" class="muted">Email</label>
-  <input id="email" name="email" type="email" required autocomplete="email" placeholder="you@example.com" style="margin:8px 0 14px">
-  <button class="btn" type="submit">Email me a link</button>
-</form>`,
+  <input id="email" name="email" type="email" autocomplete="email webauthn" required style="margin:6px 0 14px">
+  <button class="btn">Email me a link</button>
+</form>
+<p style="margin-top:18px"><button class="btn ghost" id="pk">Sign in with a passkey</button> <span id="pkmsg" class="muted"></span></p>
+<p class="muted">${signup ? 'Already have one? <a href="/signin">Sign in</a>.' : 'New here? The same link makes an account: <a href="/signup">sign up</a>.'}</p>
+${PASSKEY_JS}
+<script>
+document.getElementById('pk').addEventListener('click',async()=>{const msg=document.getElementById('pkmsg');
+  try{const opts=await (await fetch('/auth/passkey/options',{method:'POST'})).json();
+    const as=await SimpleWebAuthnBrowser.startAuthentication({optionsJSON:opts});
+    const r=await fetch('/auth/passkey',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(as)});
+    const j=await r.json();if(j.ok){location.href=j.next||'/account';return}msg.textContent=j.error||'that did not work';
+  }catch(e){msg.textContent=e.message}});
+</script>`,
   });
 }
 
-export function Sent({ email }) {
+export function Sent({ email, config }) {
   return page({
-    title: 'Check your email — typeheard',
+    config,
+    title: 'Check your email - typeheard',
     description: 'A sign-in link is on its way.',
-    body: `
-<h1>Check your email</h1>
-<p class="lede">If ${esc(email)} can receive mail, a sign-in link is on its way. It works
-once and expires in 20 minutes.</p>
-<p><a href="/">Back to the tool</a></p>`,
+    body: `<h1>Check your email</h1>
+<p class="lede">If ${esc(email) || 'that address'} can receive mail, a sign-in link is on its way.
+It works once and expires in twenty minutes.</p>`,
   });
 }
 
-export function NotFound() {
+export function Gone({ config }) {
   return page({
-    title: 'Not found — typeheard',
-    description: 'No such page.',
-    body: '<h1>Not found</h1><p class="lede">No such page.</p><p><a href="/">Back to the tool</a></p>',
+    config,
+    title: 'Gone - typeheard',
+    description: 'This transcript has expired or was deleted.',
+    body: `<h1>That transcript is gone</h1>
+<p class="lede">It expired or was deleted. Free previews are kept for ${config.retention.anonDays} days.</p>
+<p><a class="btn" href="/">Transcribe a file</a></p>`,
+  });
+}
+
+export function NotFound({ config } = {}) {
+  return page({
+    config,
+    title: 'Not found - typeheard',
+    description: 'Nothing here.',
+    body: `<h1>Nothing here</h1><p class="lede"><a href="/">Back to the start</a>.</p>`,
   });
 }

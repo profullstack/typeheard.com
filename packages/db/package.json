@@ -8,5 +8,7 @@
     "./queries": "./src/queries.js",
     "./migrate": "./src/migrate.js"
   },
-  "dependencies": { "@typeheard/config": "workspace:*" }
+  "dependencies": {
+    "@typeheard/config": "workspace:*"
+  }
 }

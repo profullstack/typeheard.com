@@ -28,4 +28,14 @@ export const OPEN_PATHS = [
 ];
 
 /** The subset the rate limiter also skips: liveness and crawler boilerplate. */
-export const UNMETERED_PATHS = ['/healthz', '/robots.txt', '/sitemap.xml'];
+export const UNMETERED_PATHS = [
+  '/healthz',
+  '/robots.txt',
+  '/sitemap.xml',
+  // Static assets: a page view fetches several, and none of them is the product.
+  '/icons/',
+  '/favicon.ico',
+  '/favicon.svg',
+  '/logo.svg',
+  '/manifest.webmanifest',
+];
