@@ -38,4 +38,7 @@ export const UNMETERED_PATHS = [
   '/favicon.svg',
   '/logo.svg',
   '/manifest.webmanifest',
+  // CoinPay's callbacks share its egress IPs with every other merchant, so a 402
+  // here would leave a paid top-up uncredited. The signature is the gate.
+  '/webhooks/',
 ];

@@ -55,3 +55,12 @@ test('liveness and crawler boilerplate are never metered', () => {
     expect(matchesAny(UNMETERED_PATHS, path)).toBe(true);
   }
 });
+
+test('payment webhooks are never metered, or a 402 leaves a paid top-up uncredited', () => {
+  expect(matchesAny(UNMETERED_PATHS, '/webhooks/coinpay')).toBe(true);
+  // Unmetered is not open: the x402 gate must still never sell a pass for it.
+  expect(matchesAny(OPEN_PATHS, '/webhooks/coinpay')).toBe(false);
+  for (const path of ['/', '/api/topup', '/api/v1/transcripts', '/account']) {
+    expect(matchesAny(UNMETERED_PATHS, path)).toBe(false);
+  }
+});
