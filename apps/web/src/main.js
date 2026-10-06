@@ -1,10 +1,11 @@
+import { mkdir, unlink } from 'node:fs/promises';
 import { assertCoinpayMerchantKey, config } from '@typeheard/config';
 import { close as closeDb, healthcheck, sql } from '@typeheard/db';
-import * as q from '@typeheard/db/queries';
 import { migrate } from '@typeheard/db/migrate';
+import * as q from '@typeheard/db/queries';
 import { configurePayments } from '@typeheard/payments';
-import { startInfer, stopInfer, waitForInfer } from '@typeheard/cutout';
 import { app } from './app.js';
+import { startWorker, stopWorker } from './lib/worker.js';
 
 /*
  * Hand the payments package its database handle and settings.
@@ -38,8 +39,7 @@ async function preflight(what, fn) {
     } catch {}
     console.error(
       `[boot] cannot reach ${what} at ${host}: ${err?.message ?? err}\n` +
-        '[boot] check DATABASE_URL on this service (Railway does not share variables ' +
-        'between services, so a database in another project is not reachable).',
+        "[boot] check DATABASE_URL in this deployment's app.env.",
     );
     throw err;
   }
@@ -50,56 +50,51 @@ async function preflight(what, fn) {
 await preflight('postgres', () => migrate());
 if (!(await healthcheck())) throw new Error('database healthcheck failed at boot');
 
-/*
- * Start the model and wait for it BEFORE listening.
- *
- * Railway decides a deploy succeeded when /healthz answers. If this listened first, a
- * container still loading weights would report healthy and then serve timeouts to
- * every real request -- a green deploy in front of a broken site. Not listening at all
- * is the honest signal, and `healthcheckTimeout` in railway.json is set well above the
- * wait below to give it room.
- */
-startInfer();
-if (config.roles.includes('infer')) {
-  const ready = await waitForInfer({ timeoutMs: 240_000 });
-  if (!ready) {
-    // Deliberately not fatal. A model that is slow to warm still recovers, and a
-    // container that exits here would crash-loop instead of coming good.
-    console.error('[boot] model not ready; serving anyway, cutouts will fail until it is');
-  }
-}
+// Uploads wait here for their turn and are deleted the moment the words are out.
+await mkdir(config.dataDir, { recursive: true });
 
 /*
- * Delete shared images that have passed their date.
+ * Delete transcripts that have passed their date.
  *
- * The read path already refuses an expired share, so this is about not keeping other
- * people's photographs rather than about correctness. It runs on boot and on an
- * interval; every instance running it is harmless because the delete is idempotent
- * and indexed.
+ * The read path already refuses an expired id, so this is about not keeping other
+ * people's interviews rather than about correctness. Idempotent and indexed, so
+ * every instance running it is harmless.
  */
-async function purgeShares() {
+async function purge() {
   try {
-    const n = await q.purgeExpiredShares();
-    if (n > 0) console.log(`[shares] purged ${n} expired`);
+    const rows = await q.purgeExpiredTranscripts();
+    for (const row of rows) if (row.upload_path) await unlink(row.upload_path).catch(() => {});
+    if (rows.length) console.log(`[purge] removed ${rows.length} expired transcript(s)`);
   } catch (err) {
     // Never fatal: failing to tidy up must not take the site down.
-    console.warn(`[shares] purge failed: ${err?.message ?? err}`);
+    console.warn(`[purge] failed: ${err?.message ?? err}`);
   }
 }
-await purgeShares();
-const purgeTimer = setInterval(purgeShares, config.shares.purgeIntervalMinutes * 60_000);
+await purge();
+const purgeTimer = setInterval(purge, config.retention.purgeIntervalMinutes * 60_000);
 
-// Railway injects PORT. Never hardcode it: a fixed port leaves the edge proxy talking
-// to a closed socket while the container still reports healthy.
-const server = Bun.serve({ port: config.port, fetch: app.fetch, idleTimeout: 120 });
-console.log(`[web] listening on :${server.port} as ${config.roles.join('+')}`);
-console.log(`[web] site ${config.siteUrl} · payments ${config.coinpay.enabled ? 'on' : 'off'} · x402 ${config.x402.enabled ? 'on' : 'off'}`);
+// Jobs queued before a restart are picked up again here.
+await startWorker();
+
+// The port comes from the environment; the dev2 compose file maps it behind nginx.
+const server = Bun.serve({
+  port: config.port,
+  fetch: app.fetch,
+  idleTimeout: 255,
+  maxRequestBodySize: config.uploads.maxBytes + 1024 * 1024,
+});
+console.log(
+  `[web] listening on :${server.port}, ${config.whisper.concurrency} transcription(s) at a time`,
+);
+console.log(
+  `[web] site ${config.siteUrl} · payments ${config.coinpay.enabled ? 'on' : 'off'} · x402 ${config.x402.enabled ? 'on' : 'off'}`,
+);
 
 async function shutdown(signal) {
   console.log(`[main] ${signal}, draining`);
   clearInterval(purgeTimer);
   await Promise.allSettled([server.stop(true)]);
-  stopInfer();
+  stopWorker();
   await closeDb();
   process.exit(0);
 }

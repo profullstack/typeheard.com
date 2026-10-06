@@ -145,7 +145,7 @@ export async function grantCredits(tx, { userId, credits, paymentId, reason = 't
 /**
  * Spend credits, or refuse.
  *
- * The `for update` on the user row is the whole point. Without it, two cutouts
+ * The `for update` on the user row is the whole point. Without it, two uploads
  * submitted at the same moment both read a balance of one, both pass the check and
  * both insert a debit -- and the account finishes at minus one, having been given
  * work it did not pay for. Locking the user serialises every spend for that account
@@ -154,7 +154,7 @@ export async function grantCredits(tx, { userId, credits, paymentId, reason = 't
  * Returns null when the balance is short, so the caller can offer a top-up rather
  * than failing the request.
  */
-export async function spendCredits({ userId, cost, reason, cutoutId = null }) {
+export async function spendCredits({ userId, cost, reason, transcriptId = null }) {
   if (!userId || !Number.isFinite(cost) || cost <= 0) throw new Error('bad spend');
   return sql.begin(async (tx) => {
     await tx`select id from users where id = ${userId} for update`;
@@ -165,7 +165,7 @@ export async function spendCredits({ userId, cost, reason, cutoutId = null }) {
         user_id: userId,
         delta: -cost,
         reason,
-        cutout_id: cutoutId,
+        transcript_id: transcriptId,
       })}
       returning id
     `;
@@ -197,173 +197,126 @@ export async function userEmail(userId) {
   return row?.email ?? null;
 }
 
-/* ------------------------------------------------------------------ cutouts -- */
+/* -------------------------------------------------------------- transcripts -- */
 
-export async function recordCutout(row) {
+/**
+ * A transcript is also its job.
+ *
+ * One row from upload to words: queued with the file on disk, running, then done
+ * with the segments or failed with the reason. Keeping the queue in Postgres rather
+ * than in memory is what lets a deploy restart the container without losing the
+ * interview somebody is waiting on -- the worker picks queued rows back up at boot.
+ */
+export async function createTranscript(row) {
   const [out] = await sql`
-    insert into cutouts ${sql({
+    insert into transcripts ${sql({
       user_id: row.userId ?? null,
       api_key_id: row.apiKeyId ?? null,
       tier: row.tier,
-      model: row.model,
-      width: row.width ?? null,
-      height: row.height ?? null,
+      status: 'queued',
+      filename: row.filename ?? null,
+      title: row.title ?? null,
+      language: row.language ?? 'auto',
+      duration_sec: row.durationSec,
+      minutes_charged: row.minutesCharged ?? 0,
+      upload_path: row.uploadPath,
       bytes_in: row.bytesIn ?? null,
-      bytes_out: row.bytesOut ?? null,
-      duration_ms: row.durationMs ?? null,
-      status: row.status ?? 'ok',
       payer: row.payer ?? null,
+      expires_at: row.expiresAt,
     })}
-    returning id
+    returning id, status, created_at
   `;
-  return out.id;
-}
-
-export async function recentCutouts(userId, limit = 25) {
-  return sql`
-    select id, tier, model, width, height, duration_ms, created_at from cutouts
-    where user_id = ${userId} order by created_at desc limit ${limit}
-  `;
-}
-
-/* ------------------------------------------------------------------- shares -- */
-
-/**
- * Keep a result so it has a URL.
- *
- * Returns null rather than throwing when the image is too big to be worth keeping:
- * a share link is a nicety, and failing somebody's cutout because we did not want
- * to store the result would be trading the product for the garnish.
- */
-export async function createShare({
-  cutoutId,
-  userId,
-  png,
-  width,
-  height,
-  tier,
-  model,
-  source = null,
-  sourceContentType = null,
-  sourceWidth = null,
-  sourceHeight = null,
-  ttlDays = 7,
-  maxBytes = 8 * 1024 * 1024,
-}) {
-  if (!png || png.byteLength === 0) return null;
-  if (png.byteLength > maxBytes) return null;
-
-  /*
-   * The original is optional even when we have it.
-   *
-   * A 20MB phone photo is not worth keeping for seven days so that a share page can
-   * show a thumbnail of it, but the RESULT still is. So an oversized source is
-   * dropped and the share is created without a "before" rather than not created at
-   * all -- the page copes, and the caller keeps the thing they actually asked for.
-   */
-  const keepSource = source && source.byteLength > 0 && source.byteLength <= maxBytes;
-
-  /*
-   * Record WHY, when we are not keeping it.
-   *
-   * Without this the page has to guess, and it guessed wrong: every sourceless row
-   * was told its original had been too large, including the ones written before
-   * originals were kept at all. A reason that is invented is worse than none.
-   */
-  const omitted = keepSource
-    ? null
-    : source && source.byteLength > maxBytes
-      ? 'too_large'
-      : 'absent';
-
-  const [row] = await sql`
-    insert into shares ${sql({
-      cutout_id: cutoutId ?? null,
-      user_id: userId ?? null,
-      png: Buffer.from(png),
-      width: width ?? null,
-      height: height ?? null,
-      tier: tier ?? null,
-      model: model ?? null,
-      source: keepSource ? Buffer.from(source) : null,
-      source_content_type: keepSource ? (sourceContentType ?? 'application/octet-stream') : null,
-      source_width: keepSource ? (sourceWidth ?? null) : null,
-      source_height: keepSource ? (sourceHeight ?? null) : null,
-      source_omitted_reason: omitted,
-      expires_at: new Date(Date.now() + ttlDays * 86_400_000),
-    })}
-    returning id, expires_at
-  `;
-  return row;
-}
-
-/** The original, if one was small enough to keep. */
-export async function getShareSource(id) {
-  if (!/^[0-9a-f-]{36}$/i.test(String(id))) return null;
-  const [row] = await sql`
-    select source, source_content_type from shares
-    where id = ${id}::uuid and expires_at > now() and source is not null
-  `;
-  return row ?? null;
-}
-
-/** A share, if it exists and has not expired. Expiry is enforced in the query so a
- *  missed cleanup run can never serve an image past its date. */
-export async function getShare(id) {
-  if (!/^[0-9a-f-]{36}$/i.test(String(id))) return null;
-  const [row] = await sql`
-    select * from shares where id = ${id}::uuid and expires_at > now()
-  `;
-  return row ?? null;
-}
-
-/** The same, without the bytes -- for a page that only needs to describe it. */
-export async function getShareMeta(id) {
-  if (!/^[0-9a-f-]{36}$/i.test(String(id))) return null;
-  const [row] = await sql`
-    select id, width, height, tier, model, created_at, expires_at,
-           octet_length(png) as bytes,
-           source_width, source_height, source_omitted_reason,
-           -- Whether there is a "before" to show, without loading it to find out.
-           (source is not null) as has_source
-    from shares where id = ${id}::uuid and expires_at > now()
-  `;
-  return row ?? null;
+  return out;
 }
 
 /**
- * One person's history: every cutout they have run, with its share if the image is
- * still around.
+ * Claim the oldest queued job, or nothing.
  *
- * Driven from `cutouts` rather than from `shares` so an expired image still appears
- * as something that happened and was charged for, instead of vanishing from the
- * record along with its bytes.
+ * `for update skip locked` lets several workers share one table without two of
+ * them transcribing the same file -- the claim and the status change are one
+ * statement, so there is no window between reading and taking.
  */
-export async function cutoutHistory(userId, limit = 60) {
-  if (!userId) return [];
-  return sql`
-    select c.id, c.tier, c.model, c.width, c.height, c.duration_ms, c.created_at,
-           s.id as share_id, s.expires_at as share_expires_at
-    from cutouts c
-    left join shares s on s.cutout_id = c.id and s.expires_at > now()
-    where c.user_id = ${userId}
-    order by c.created_at desc
-    limit ${limit}
+export async function claimNextTranscript() {
+  const [row] = await sql`
+    update transcripts set status = 'running', started_at = now()
+    where id = (
+      select id from transcripts where status = 'queued'
+      order by created_at limit 1 for update skip locked
+    )
+    returning *
   `;
+  return row ?? null;
 }
 
-export async function deleteShare({ id, userId }) {
-  if (!/^[0-9a-f-]{36}$/i.test(String(id))) return false;
+/** Anything left running by a container that died mid-job goes back in the queue. */
+export async function requeueStale() {
   const rows = await sql`
-    delete from shares where id = ${id}::uuid and user_id = ${userId} returning id
+    update transcripts set status = 'queued', started_at = null
+    where status = 'running' returning id
   `;
-  return rows.length > 0;
+  return rows.length;
 }
 
-/** Drop what has expired. Cheap, indexed, and safe to run on every instance. */
-export async function purgeExpiredShares() {
-  const rows = await sql`delete from shares where expires_at <= now() returning id`;
-  return rows.length;
+export async function finishTranscript({ id, segments, transcribedSec, language, ms }) {
+  await sql`
+    update transcripts set
+      status = 'done',
+      segments = (${{ segments }}::jsonb -> 'segments'),
+      transcribed_sec = ${transcribedSec},
+      language = coalesce(${language ?? null}, language),
+      work_ms = ${ms ?? null},
+      upload_path = null,
+      finished_at = now()
+    where id = ${id}::uuid
+  `;
+}
+
+export async function failTranscript({ id, error }) {
+  await sql`
+    update transcripts set status = 'failed', error = ${String(error).slice(0, 500)},
+      upload_path = null, finished_at = now()
+    where id = ${id}::uuid
+  `;
+}
+
+/** One transcript by its id, which is the capability. Expired is the same as gone. */
+export async function getTranscript(id) {
+  if (!/^[0-9a-f-]{36}$/i.test(String(id))) return null;
+  const [row] = await sql`
+    select * from transcripts where id = ${id}::uuid and expires_at > now()
+  `;
+  return row ?? null;
+}
+
+/** Where a queued job stands: how many are ahead of it. */
+export async function queuePosition(id) {
+  const [row] = await sql`
+    select count(*)::int as ahead from transcripts
+    where status in ('queued', 'running')
+      and created_at < (select created_at from transcripts where id = ${id}::uuid)
+  `;
+  return row?.ahead ?? 0;
+}
+
+export async function transcriptHistory(userId, limit = 100) {
+  return sql`
+    select id, tier, status, filename, title, duration_sec, transcribed_sec,
+           minutes_charged, created_at, finished_at, expires_at, error
+    from transcripts where user_id = ${userId} and expires_at > now()
+    order by created_at desc limit ${limit}
+  `;
+}
+
+export async function deleteTranscript({ id, userId }) {
+  const rows = await sql`
+    delete from transcripts where id = ${id}::uuid and user_id = ${userId} returning upload_path
+  `;
+  return rows.length ? { deleted: true, uploadPath: rows[0].upload_path } : { deleted: false };
+}
+
+/** Expired transcripts, gone. Returns any upload paths left behind so the caller can unlink them. */
+export async function purgeExpiredTranscripts() {
+  return sql`delete from transcripts where expires_at <= now() returning id, upload_path`;
 }
 
 /* ----------------------------------------------------------------- api keys -- */

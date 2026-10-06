@@ -29,7 +29,7 @@ beforeAll(async () => {
 });
 
 beforeEach(async () => {
-  await sql`truncate credit_ledger, cutouts, payments, sessions, api_keys, users restart identity cascade`;
+  await sql`truncate credit_ledger, transcripts, payments, sessions, api_keys, users restart identity cascade`;
   user = await q.findOrCreateUser(`hook-${crypto.randomUUID()}@example.com`);
 });
 
@@ -48,7 +48,7 @@ async function checkout(amountCents = 500, ref = crypto.randomUUID()) {
 }
 
 /** The envelope CoinPay sends. The top-level id is the EVENT, never the payment. */
-function nested(paymentId, status, { userId = user.id, credits = '200' } = {}) {
+function nested(paymentId, status, { userId = user.id, credits = '300' } = {}) {
   return {
     id: `evt_${paymentId}_${Math.floor(Date.now() / 1000)}`,
     type: `payment.${status}`,
@@ -111,7 +111,7 @@ test('a nested payment.confirmed credits the buyer', async () => {
   const res = await deliver(nested(ref, 'confirmed'));
   expect(res.status).toBe(200);
   expect((await res.json()).granted).toBe(true);
-  expect(await q.creditBalance(user.id)).toBe(200);
+  expect(await q.creditBalance(user.id)).toBe(300);
 });
 
 test('a nested payment.forwarded on its own credits the buyer', async () => {
@@ -119,7 +119,7 @@ test('a nested payment.forwarded on its own credits the buyer', async () => {
   const ref = await checkout(500);
   const res = await deliver(nested(ref, 'forwarded'));
   expect(res.status).toBe(200);
-  expect(await q.creditBalance(user.id)).toBe(200);
+  expect(await q.creditBalance(user.id)).toBe(300);
 });
 
 test('confirmed, forwarded and their retries credit exactly once', async () => {
@@ -128,14 +128,14 @@ test('confirmed, forwarded and their retries credit exactly once', async () => {
     const res = await deliver(nested(ref, status));
     expect(res.status).toBe(200);
   }
-  expect(await ledger(ref)).toEqual([{ delta: 200 }]);
-  expect(await q.creditBalance(user.id)).toBe(200);
+  expect(await ledger(ref)).toEqual([{ delta: 300 }]);
+  expect(await q.creditBalance(user.id)).toBe(300);
 });
 
 test('credits follow what we charged, not what the payload says', async () => {
   const ref = await checkout(500);
   await deliver(nested(ref, 'forwarded', { credits: '6000' }));
-  expect(await q.creditBalance(user.id)).toBe(200);
+  expect(await q.creditBalance(user.id)).toBe(300);
 });
 
 test('a nested pending or expired payment grants nothing', async () => {

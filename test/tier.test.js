@@ -2,73 +2,67 @@ import { expect, test } from 'bun:test';
 import { decideTier } from '../apps/web/src/lib/tier.js';
 
 /**
- * The billing decision, which is the one place a mistake either gives work away or
- * charges for something the caller did not get.
+ * The billing decision: the one place a mistake either gives an hour of work away
+ * or charges for minutes the caller did not get.
  */
+const base = {
+  previewSeconds: 180,
+  agentMaxMinutes: 60,
+  minutes: 40,
+  paidAgent: false,
+  hasUser: false,
+  canSpend: false,
+};
 
 test('an explicit preview is always a preview, even for someone who could pay', () => {
-  expect(decideTier({ asked: 'preview', paidAgent: true, hasUser: true, canSpend: true })).toEqual({
-    tier: 'preview',
+  expect(
+    decideTier({ ...base, asked: 'preview', paidAgent: true, hasUser: true, canSpend: true }),
+  ).toEqual({ tier: 'preview', refuse: null });
+});
+
+test('a recording shorter than the preview is the whole recording, free', () => {
+  expect(decideTier({ ...base, asked: 'full', minutes: 3 })).toEqual({
+    tier: 'full',
+    refuse: null,
+  });
+  expect(decideTier({ ...base, asked: 'auto', minutes: 2 })).toEqual({
+    tier: 'full',
     refuse: null,
   });
 });
 
-test('an agent holding a pass gets full resolution with no account', () => {
-  const d = decideTier({ asked: 'hd', paidAgent: true, hasUser: false, canSpend: false });
-  expect(d.tier).toBe('hd');
-  expect(d.refuse).toBeNull();
+test('an account with the minutes gets the whole file', () => {
+  expect(decideTier({ ...base, asked: 'auto', hasUser: true, canSpend: true })).toEqual({
+    tier: 'full',
+    refuse: null,
+  });
 });
 
-test('an account with credit gets full resolution', () => {
-  const d = decideTier({ asked: 'auto', paidAgent: false, hasUser: true, canSpend: true });
-  expect(d.tier).toBe('hd');
-  expect(d.refuse).toBeNull();
+test('an agent with a pass gets the whole file up to the per-call cap, and a 413 past it', () => {
+  expect(decideTier({ ...base, asked: 'auto', paidAgent: true }).tier).toBe('full');
+  const long = decideTier({ ...base, asked: 'auto', paidAgent: true, minutes: 61 });
+  expect(long.refuse?.status).toBe(413);
 });
 
-/**
- * The regression this file exists for.
- *
- * An anonymous caller asking for `tier=hd` used to be handed a 640px preview with a
- * 200 and no indication anything had been substituted. It must be a 402.
- */
-test('an anonymous caller asking for hd is refused, not quietly downgraded', () => {
-  const d = decideTier({ asked: 'hd', paidAgent: false, hasUser: false, canSpend: false });
-  expect(d.refuse).not.toBeNull();
-  expect(d.refuse.reason).toMatch(/credits|payment/);
+test('asking for the whole file without paying is a 402, never a quiet preview', () => {
+  const anon = decideTier({ ...base, asked: 'full' });
+  expect(anon.refuse?.status).toBe(402);
+  const broke = decideTier({ ...base, asked: 'full', hasUser: true, canSpend: false });
+  expect(broke.refuse?.reason).toContain('not enough minutes');
 });
 
-test('an account out of credit asking for hd is refused', () => {
-  const d = decideTier({ asked: 'hd', paidAgent: false, hasUser: true, canSpend: false });
-  expect(d.refuse).not.toBeNull();
-  expect(d.refuse.reason).toBe('no credits');
+test('a private instance transcribes every file in full for anyone', () => {
+  expect(decideTier({ ...base, asked: 'full', freeForAll: true })).toEqual({
+    tier: 'full',
+    refuse: null,
+  });
+  expect(decideTier({ ...base, asked: 'preview', freeForAll: true }).tier).toBe('preview');
 });
 
-/**
- * `auto` is a browser saying "whatever I am entitled to", so a preview is the correct
- * answer rather than an error. Only an EXPLICIT hd is refused.
- */
-test('auto falls back to a preview without refusing', () => {
-  for (const [hasUser, canSpend] of [
-    [false, false],
-    [true, false],
-  ]) {
-    const d = decideTier({ asked: 'auto', paidAgent: false, hasUser, canSpend });
-    expect(d.tier).toBe('preview');
-    expect(d.refuse).toBeNull();
-  }
-});
-
-test('no combination ever returns hd without someone having paid for it', () => {
-  for (const asked of ['preview', 'hd', 'auto']) {
-    for (const paidAgent of [true, false]) {
-      for (const hasUser of [true, false]) {
-        for (const canSpend of [true, false]) {
-          const d = decideTier({ asked, paidAgent, hasUser, canSpend });
-          if (d.tier === 'hd') {
-            expect(paidAgent || (hasUser && canSpend)).toBe(true);
-          }
-        }
-      }
-    }
-  }
+test('a browser asking for whatever it is entitled to gets the preview', () => {
+  expect(decideTier({ ...base, asked: 'auto' })).toEqual({ tier: 'preview', refuse: null });
+  expect(decideTier({ ...base, asked: 'auto', hasUser: true })).toEqual({
+    tier: 'preview',
+    refuse: null,
+  });
 });

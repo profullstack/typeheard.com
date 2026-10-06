@@ -76,7 +76,7 @@ create table credit_ledger (
   delta      int not null check (delta <> 0),
   reason     text not null,
   payment_id uuid references payments(id) on delete set null,
-  cutout_id  uuid,
+  transcript_id uuid,
   created_at timestamptz not null default now()
 );
 create index credit_ledger_user_idx on credit_ledger (user_id, id desc);
@@ -88,29 +88,41 @@ create unique index credit_ledger_one_grant_per_payment
   on credit_ledger (payment_id) where payment_id is not null;
 
 -- ---------------------------------------------------------------------------
--- Work done. One row per cutout, paid or free.
+-- Transcripts. One row is the job and its result: queued with the upload on disk,
+-- running, then done with the segments (and the upload deleted) or failed.
+-- The id is the capability that a share link carries, so it is a random uuid.
 -- ---------------------------------------------------------------------------
 
-create table cutouts (
-  id          uuid primary key default gen_random_uuid(),
+create table transcripts (
+  id              uuid primary key default gen_random_uuid(),
   -- Null for an anonymous preview and for an x402 caller, who never makes an account.
-  user_id     uuid references users(id) on delete set null,
-  api_key_id  uuid,
-  tier        text not null check (tier in ('preview', 'hd')),
-  model       text not null,
-  -- Recorded so a dispute about a charge can be answered with what was actually run.
-  width       int,
-  height      int,
-  bytes_in    int,
-  bytes_out   int,
-  duration_ms int,
-  status      text not null default 'ok',
+  user_id         uuid references users(id) on delete cascade,
+  api_key_id      uuid,
+  tier            text not null check (tier in ('preview', 'full')),
+  status          text not null default 'queued' check (status in ('queued', 'running', 'done', 'failed')),
+  filename        text,
+  title           text,
+  language        text not null default 'auto',
+  duration_sec    double precision not null,
+  transcribed_sec double precision,
+  -- What the account paid, so a dispute is answered with the number actually charged.
+  minutes_charged int not null default 0,
+  -- Present only while queued or running; cleared the moment the words are out.
+  upload_path     text,
+  bytes_in        bigint,
+  segments        jsonb,
+  error           text,
+  work_ms         int,
   -- The paying address, when an agent paid per call instead of spending credits.
-  payer       text,
-  created_at  timestamptz not null default now()
+  payer           text,
+  created_at      timestamptz not null default now(),
+  started_at      timestamptz,
+  finished_at     timestamptz,
+  expires_at      timestamptz not null
 );
-create index cutouts_user_idx on cutouts (user_id, created_at desc);
-create index cutouts_created_idx on cutouts (created_at desc);
+create index transcripts_user_idx on transcripts (user_id, created_at desc);
+create index transcripts_queue_idx on transcripts (created_at) where status in ('queued', 'running');
+create index transcripts_expires_idx on transcripts (expires_at);
 
 -- ---------------------------------------------------------------------------
 -- Programmatic access for people (agents use x402 and need none of this).
