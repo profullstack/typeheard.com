@@ -93,6 +93,7 @@ ${canonical ? `<link rel="canonical" href="${esc(canonical)}">` : ''}
 <meta name="theme-color" content="#100f0c" media="(prefers-color-scheme: dark)">
 <meta property="og:image" content="${esc(site)}/icons/icon-512x512.png">
 <style>${STYLE}</style>
+<script data-site="2d708fa7-d482-436e-964e-34629305d6db" src="https://crawlproof.com/stats.js" async></script>
 </head>
 <body>
 <header><div class="wrap">
