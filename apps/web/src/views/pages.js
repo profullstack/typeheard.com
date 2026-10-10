@@ -35,8 +35,8 @@ header .wrap{display:flex;align-items:center;flex-wrap:wrap;gap:6px 20px;min-hei
 @media(max-width:560px){header nav{margin-left:0;width:100%;gap:16px}}
 .brand{font-weight:800;font-size:21px;text-decoration:none;color:var(--fg);letter-spacing:-.03em;display:flex;align-items:center;gap:9px}
 .brand b{color:var(--accent);font-weight:inherit}
-nav{margin-left:auto;display:flex;gap:18px;font-size:15px;flex-wrap:wrap}
-nav a{text-decoration:none;color:var(--mut)}nav a:hover{color:var(--fg)}
+:where(header nav,nav.tabs){margin-left:auto;display:flex;gap:18px;font-size:15px;flex-wrap:wrap}
+:where(header nav,nav.tabs) a{text-decoration:none;color:var(--mut)}:where(header nav,nav.tabs) a:hover{color:var(--fg)}
 h1{font-size:clamp(32px,5.5vw,50px);line-height:1.08;letter-spacing:-.035em;margin:48px 0 12px}
 h2{font-size:22px;letter-spacing:-.02em;margin:40px 0 12px}
 .lede{font-size:19px;color:var(--mut);margin:0 0 30px;max-width:62ch}
