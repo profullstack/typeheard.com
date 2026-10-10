@@ -32,6 +32,7 @@ export const UNMETERED_PATHS = [
   '/healthz',
   '/robots.txt',
   '/sitemap.xml',
+  '/.well-known/openwebring.json',
   // Static assets: a page view fetches several, and none of them is the product.
   '/icons/',
   '/favicon.ico',
