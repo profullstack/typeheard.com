@@ -21,6 +21,7 @@ import { getCookie } from 'hono/cookie';
 import { OPEN_PATHS, UNMETERED_PATHS } from './lib/open-paths.js';
 import { decideTier } from './lib/tier.js';
 import { pump } from './lib/worker.js';
+import { refreshFooter } from './views/footer.js';
 import {
   Account,
   Docs,
@@ -95,6 +96,13 @@ app.use(
 );
 
 /* ------------------------------------------------------------------- pages -- */
+
+// The shared footer's template refreshes from jsDelivr at most hourly; await it
+// here so the synchronous page templates always have a current copy.
+app.use('*', async (c, next) => {
+  if (c.req.method === 'GET') await refreshFooter();
+  await next();
+});
 
 const html = (c, body, status = 200) => c.html(body, status);
 

@@ -5,6 +5,8 @@
  * a page of text. A build step for that is a cost with nothing on the other side.
  */
 
+import { siteFooter } from './footer.js';
+
 const esc = (s) =>
   String(s ?? '').replace(
     /[&<>"']/g,
@@ -68,8 +70,8 @@ select{font:inherit;padding:10px 12px;border:1px solid var(--line);border-radius
 .tab{padding:9px 14px;text-decoration:none;color:var(--mut);border-bottom:2px solid transparent;margin-bottom:-1px}
 .tab:hover{color:var(--fg)}
 .tab.on{color:var(--fg);border-bottom-color:var(--accent);font-weight:600}
-footer{margin:80px 0 40px;padding-top:24px;border-top:1px solid var(--line);color:var(--mut);font-size:14px}
-.webring{display:flex;gap:12px;font-size:13px;margin-left:0}
+.foot-note{margin-top:80px;color:var(--mut);font-size:14px}
+.pfs-footer{color:var(--fg);margin-top:16px}
 `;
 
 function page({ title, description, body, canonical, config }) {
@@ -106,17 +108,11 @@ ${canonical ? `<link rel="canonical" href="${esc(canonical)}">` : ''}
   </nav>
 </div></header>
 <main class="wrap">${body}</main>
-<footer class="wrap">
+<div class="wrap foot-note">
   <p>Transcribed by whisper.cpp on our own hardware. Your audio is deleted the moment
-  the words are out; transcripts are yours to delete. Open source, MIT.</p>
-  <p><a href="https://profullstack.com">Profullstack</a> · <a href="${esc(site)}/llms.txt">llms.txt</a></p>
-  <nav class="webring" aria-label="Profullstack webring">
-    <a href="https://rssamplifier.com/ring/profullstack/previous?from=https%3A%2F%2Ftypeheard.com%2F" rel="prev" title="Previous site">&lt;&lt;</a>
-    <a href="https://rssamplifier.com/ring/profullstack">Profullstack</a>
-    <a href="https://rssamplifier.com/ring/profullstack/next?from=https%3A%2F%2Ftypeheard.com%2F" rel="next" title="Next site">&gt;&gt;</a>
-    <a href="https://rssamplifier.com/ring/profullstack/random?from=https%3A%2F%2Ftypeheard.com%2F" title="Random site" aria-label="Random site">&#x2684;</a>
-  </nav>
-</footer>
+  the words are out; transcripts are yours to delete.</p>
+</div>
+${siteFooter()}
 </body></html>`;
 }
 
