@@ -111,9 +111,10 @@ ${canonical ? `<link rel="canonical" href="${esc(canonical)}">` : ''}
   the words are out; transcripts are yours to delete. Open source, MIT.</p>
   <p><a href="https://profullstack.com">Profullstack</a> · <a href="${esc(site)}/llms.txt">llms.txt</a></p>
   <nav class="webring" aria-label="Profullstack webring">
-    <a href="https://rssamplifier.com/ring/profullstack/previous?from=https%3A%2F%2Ftypeheard.com%2F" rel="prev">&lt;&lt;</a>
+    <a href="https://rssamplifier.com/ring/profullstack/previous?from=https%3A%2F%2Ftypeheard.com%2F" rel="prev" title="Previous site">&lt;&lt;</a>
     <a href="https://rssamplifier.com/ring/profullstack">Profullstack</a>
-    <a href="https://rssamplifier.com/ring/profullstack/next?from=https%3A%2F%2Ftypeheard.com%2F" rel="next">&gt;&gt;</a>
+    <a href="https://rssamplifier.com/ring/profullstack/next?from=https%3A%2F%2Ftypeheard.com%2F" rel="next" title="Next site">&gt;&gt;</a>
+    <a href="https://rssamplifier.com/ring/profullstack/random?from=https%3A%2F%2Ftypeheard.com%2F" title="Random site" aria-label="Random site">&#x2684;</a>
   </nav>
 </footer>
 </body></html>`;

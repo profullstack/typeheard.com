@@ -616,6 +616,15 @@ app.get('/robots.txt', (c) =>
   ),
 );
 
+app.get('/.well-known/openwebring.json', (c) =>
+  c.json({
+    openwebring: '0.1',
+    site: { url: 'https://typeheard.com/', name: 'typeheard' },
+    made_by: 'both',
+    rings: [{ ring: 'https://rssamplifier.com/ring/profullstack', slug: 'typeheard-com' }],
+  }),
+);
+
 app.get('/sitemap.xml', (c) => {
   const urls = ['/', '/pricing', '/docs', '/signup'];
   c.header('content-type', 'application/xml');
