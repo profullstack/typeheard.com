@@ -18,11 +18,17 @@ I already have" and "transcription software for my thesis interviews".
 ## Use it
 
 ```bash
-npx -y @profullstack/typeheard interview.m4a                  # prints the text
-npx -y @profullstack/typeheard talk.mp4 --format srt --out talk.srt
-npx -y @profullstack/typeheard login                          # API key for whole files
-npx -y @profullstack/typeheard tui
+curl -fsSL https://typeheard.com/install.sh | sh              # installs the typeheard CLI
 ```
+
+```bash
+typeheard interview.m4a                  # prints the text
+typeheard talk.mp4 --format srt --out talk.srt
+typeheard login                          # API key for whole files
+typeheard tui
+```
+
+No install: `npx -y @profullstack/typeheard interview.m4a` (Node 22.6+).
 
 ```bash
 curl -F file=@interview.m4a -H "Authorization: Bearer $TYPEHEARD_API_KEY" https://typeheard.com/api/v1/transcripts

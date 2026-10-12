@@ -12,7 +12,7 @@
     "directory": "packages/mcp"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=22.6"
   },
   "bin": {
     "typeheard-mcp": "./bin/typeheard-mcp.mjs"
@@ -26,12 +26,18 @@
     "README.md"
   ],
   "dependencies": {
-    "@profullstack/typeheard": "workspace:*"
+    "@profullstack/typeheard": "^0.1.0"
   },
   "keywords": [
     "mcp",
     "transcription",
     "speech-to-text",
     "whisper"
-  ]
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "bugs": {
+    "url": "https://github.com/profullstack/typeheard.com/issues"
+  }
 }

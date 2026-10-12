@@ -392,10 +392,12 @@ Without a key you get the first ${Math.round(config.pricing.previewSeconds / 60)
 curl ${base}/api/v1/transcripts/ID/txt      # also md, srt, vtt, json</pre>
 
 <h2>Command line</h2>
-<pre>npx -y @profullstack/typeheard interview.m4a            # prints the text
-npx -y @profullstack/typeheard talk.mp4 --format srt > talk.srt
-npx -y @profullstack/typeheard login                    # saves an API key
-npx -y @profullstack/typeheard tui                      # your transcripts, in the terminal</pre>
+<pre>curl -fsSL ${base}/install.sh | sh                      # installs typeheard (Node 22.6+)</pre>
+<pre>typeheard interview.m4a            # prints the text
+typeheard talk.mp4 --format srt > talk.srt
+typeheard login                    # saves an API key
+typeheard tui                      # your transcripts, in the terminal</pre>
+<p class="muted">No install: <code>npx -y @profullstack/typeheard interview.m4a</code>.</p>
 
 <h2>MCP</h2>
 <pre>{ "mcpServers": { "typeheard": { "command": "npx", "args": ["-y", "@profullstack/typeheard-mcp"],
