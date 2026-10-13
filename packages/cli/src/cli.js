@@ -10,6 +10,7 @@
  *
  * TYPEHEARD_API_KEY and TYPEHEARD_URL override the saved config.
  */
+import { readFileSync } from 'node:fs';
 import { writeFile } from 'node:fs/promises';
 import { createInterface } from 'node:readline/promises';
 import { FORMATS, get, list, me, resolveAuth, saveConfig, text, transcribe } from './client.js';
@@ -22,6 +23,7 @@ const HELP = `typeheard: drop a recording, get what was said.
   typeheard get ID [--format md]
   typeheard me                 minutes left on your account
   typeheard tui                your transcripts and uploads, in the terminal
+  typeheard --version
 
 Without a key you get the first few minutes of any file free.
 Environment: TYPEHEARD_API_KEY, TYPEHEARD_URL.`;
@@ -37,6 +39,7 @@ function parse(argv) {
       else if (argv[i + 1] && !argv[i + 1].startsWith('--')) flags[name] = argv[++i];
       else flags[name] = true;
     } else if (arg === '-h') flags.help = true;
+    else if (arg === '-v') flags.version = true;
     else positional.push(arg);
   }
   return { positional, flags };
@@ -48,6 +51,11 @@ const say = (line) => process.stderr.write(`${line}\n`);
 export async function main(argv = process.argv.slice(2)) {
   const { positional, flags } = parse(argv);
   const [cmd, ...rest] = positional;
+  if (flags.version || cmd === 'version') {
+    const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
+    console.log(`typeheard ${pkg.version}`);
+    return 0;
+  }
   if (!cmd || flags.help || cmd === 'help') {
     console.log(HELP);
     return 0;

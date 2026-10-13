@@ -119,6 +119,7 @@ const ASSET_TYPES = {
   '.svg': 'image/svg+xml',
   '.ico': 'image/x-icon',
   '.webmanifest': 'application/manifest+json',
+  '.sh': 'text/x-shellscript; charset=utf-8',
 };
 const asset = (path) => async (c) => {
   const file = Bun.file(join(PUBLIC_DIR, path));
@@ -127,7 +128,14 @@ const asset = (path) => async (c) => {
   c.header('cache-control', 'public, max-age=86400');
   return c.body(await file.arrayBuffer());
 };
-for (const name of ['favicon.ico', 'favicon.svg', 'logo.svg', 'manifest.webmanifest']) {
+// install.sh is the CLI installer: curl -fsSL https://typeheard.com/install.sh | sh
+for (const name of [
+  'favicon.ico',
+  'favicon.svg',
+  'logo.svg',
+  'manifest.webmanifest',
+  'install.sh',
+]) {
   app.get(`/${name}`, asset(name));
 }
 app.get('/icons/:name', (c) => {
@@ -655,7 +663,8 @@ app.get('/llms.txt', (c) =>
 - GET  ${config.siteUrl}/api/v1/transcripts/{id}/{txt|md|srt|vtt|json}
 - Free: the first ${Math.round(config.pricing.previewSeconds / 60)} minutes of any file, no key.
 - Whole file: Authorization: Bearer <api key> (1 minute of credit per audio minute), or pay per call with x402.
-- MCP: npx -y @profullstack/typeheard-mcp   CLI: npx -y @profullstack/typeheard <file>
+- CLI: curl -fsSL ${config.siteUrl}/install.sh | sh   then: typeheard <file>  (or npx -y @profullstack/typeheard <file>)
+- MCP: npx -y @profullstack/typeheard-mcp
 - Docs: ${config.siteUrl}/docs
 `),
 );
