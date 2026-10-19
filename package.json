@@ -1,6 +1,6 @@
 {
   "name": "typeheard.com",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "type": "module",
   "description": "Drop a recording, get what was said. Transcription on whisper.cpp, billed by the minute, with a CLI, TUI, MCP server and API.",
