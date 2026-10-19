@@ -97,8 +97,8 @@ app.use(
 
 /* ------------------------------------------------------------------- pages -- */
 
-// The shared footer's template refreshes from jsDelivr at most hourly; await it
-// here so the synchronous page templates always have a current copy.
+// The pit.world network footer refreshes at most hourly; only the first fetch is
+// awaited, so the synchronous page templates always have the last good copy.
 app.use('*', async (c, next) => {
   if (c.req.method === 'GET') await refreshFooter();
   await next();

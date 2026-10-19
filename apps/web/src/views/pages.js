@@ -70,13 +70,13 @@ select{font:inherit;padding:10px 12px;border:1px solid var(--line);border-radius
 .tab{padding:9px 14px;text-decoration:none;color:var(--mut);border-bottom:2px solid transparent;margin-bottom:-1px}
 .tab:hover{color:var(--fg)}
 .tab.on{color:var(--fg);border-bottom-color:var(--accent);font-weight:600}
-.cp-ad{display:block;height:0;overflow:hidden;margin-top:48px}
+.cp-ad{display:block;height:0;overflow:hidden;margin-top:20px}
 .cp-ad[data-cp-filled]{height:auto;overflow:visible}
-.foot-note{margin-top:80px;color:var(--mut);font-size:14px}
-.pfs-footer{color:var(--fg);margin-top:16px}
+.foot{display:flex;flex-wrap:wrap;gap:6px 18px;margin-top:80px;padding-top:18px;padding-bottom:18px;border-top:1px solid var(--line);font-size:14px;color:var(--mut)}
+.foot a{color:var(--mut);text-decoration:none}.foot a:hover{color:var(--fg)}
 `;
 
-// One CrawlProof ad unit above the foot note, only on the public marketing
+// One CrawlProof ad unit at the top of the content (never against the footer), only on the public marketing
 // pages (Landing, Pricing, Docs) -- never on account, sign-in or transcripts.
 // ad.js fills it at DOMContentLoaded; it stays zero-height until filled.
 const AD_SLOT = '8bb11c40-c297-471a-97cf-1288bb19e84e';
@@ -116,12 +116,8 @@ ${canonical ? `<link rel="canonical" href="${esc(canonical)}">` : ''}
     <a href="/account">Account</a>
   </nav>
 </div></header>
-<main class="wrap">${body}</main>
 ${ad ? AD : ''}
-<div class="wrap foot-note">
-  <p>Transcribed by whisper.cpp on our own hardware. Your audio is deleted the moment
-  the words are out; transcripts are yours to delete.</p>
-</div>
+<main class="wrap">${body}</main>
 ${siteFooter()}
 </body></html>`;
 }
