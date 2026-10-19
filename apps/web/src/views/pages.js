@@ -72,8 +72,9 @@ select{font:inherit;padding:10px 12px;border:1px solid var(--line);border-radius
 .tab.on{color:var(--fg);border-bottom-color:var(--accent);font-weight:600}
 .cp-ad{display:block;height:0;overflow:hidden;margin-top:20px}
 .cp-ad[data-cp-filled]{height:auto;overflow:visible}
-.foot{display:flex;flex-wrap:wrap;gap:6px 18px;margin-top:80px;padding-top:18px;padding-bottom:18px;border-top:1px solid var(--line);font-size:14px;color:var(--mut)}
-.foot a{color:var(--mut);text-decoration:none}.foot a:hover{color:var(--fg)}
+footer.pfs-footer{margin-top:80px;font-size:14px;--pfs-footer-muted:var(--mut);border-top-color:var(--line)}
+footer.pfs-footer nav{margin-left:0;font-size:inherit}
+footer.pfs-footer .pfs-footer__inner{flex-direction:row;flex-wrap:wrap;justify-content:center;gap:6px 18px}
 `;
 
 // One CrawlProof ad unit at the top of the content (never against the footer), only on the public marketing
