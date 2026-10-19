@@ -70,11 +70,20 @@ select{font:inherit;padding:10px 12px;border:1px solid var(--line);border-radius
 .tab{padding:9px 14px;text-decoration:none;color:var(--mut);border-bottom:2px solid transparent;margin-bottom:-1px}
 .tab:hover{color:var(--fg)}
 .tab.on{color:var(--fg);border-bottom-color:var(--accent);font-weight:600}
+.cp-ad{display:block;height:0;overflow:hidden;margin-top:48px}
+.cp-ad[data-cp-filled]{height:auto;overflow:visible}
 .foot-note{margin-top:80px;color:var(--mut);font-size:14px}
 .pfs-footer{color:var(--fg);margin-top:16px}
 `;
 
-function page({ title, description, body, canonical, config }) {
+// One CrawlProof ad unit above the foot note, only on the public marketing
+// pages (Landing, Pricing, Docs) -- never on account, sign-in or transcripts.
+// ad.js fills it at DOMContentLoaded; it stays zero-height until filled.
+const AD_SLOT = '8bb11c40-c297-471a-97cf-1288bb19e84e';
+const AD = `<div class="wrap"><aside class="cp-ad" data-cp-ad data-slot="${AD_SLOT}" data-format="text_link"></aside></div>
+<script src="https://crawlproof.com/ad.js" async></script>`;
+
+function page({ title, description, body, canonical, config, ad = false }) {
   const site = config?.siteUrl ?? 'https://typeheard.com';
   return `<!doctype html>
 <html lang="en">
@@ -108,6 +117,7 @@ ${canonical ? `<link rel="canonical" href="${esc(canonical)}">` : ''}
   </nav>
 </div></header>
 <main class="wrap">${body}</main>
+${ad ? AD : ''}
 <div class="wrap foot-note">
   <p>Transcribed by whisper.cpp on our own hardware. Your audio is deleted the moment
   the words are out; transcripts are yours to delete.</p>
@@ -143,6 +153,7 @@ export function Landing({ config, user, balance }) {
   const cheapest = config.pricing.topups[0];
   const perHour = ((cheapest.cents / cheapest.credits) * 60) / 100;
   return page({
+    ad: true,
     config,
     title: 'typeheard: drop a recording, get the transcript',
     description: `Transcribe interviews, lectures, podcasts and voice memos you already have. The first ${free} minutes of any file are free; after that about $${perHour.toFixed(2)} an hour, no subscription.`,
@@ -316,6 +327,7 @@ export function Pricing({ config }) {
   const free = Math.round(config.pricing.previewSeconds / 60);
 
   return page({
+    ad: true,
     config,
     title: 'Pricing - typeheard',
     description: 'Pay by the minute of audio. No subscription, minutes never expire.',
@@ -368,6 +380,7 @@ document.querySelectorAll('button[data-cents]').forEach(b=>b.addEventListener('c
 export function Docs({ config }) {
   const base = config.siteUrl;
   return page({
+    ad: true,
     config,
     title: 'API - typeheard',
     description:
