@@ -4,6 +4,7 @@ import { dirname, extname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { throttle } from '@profullstack/throttle/hono';
 import { createGateway } from '@profullstack/x402-gateway';
+import { x402Gateway } from '@profullstack/x402-gateway/hono';
 import * as auth from '@typeheard/auth';
 import { config } from '@typeheard/config';
 import * as q from '@typeheard/db/queries';
@@ -77,6 +78,37 @@ const gateway = config.x402.enabled
       openPaths: OPEN_PATHS,
     })
   : null;
+
+/**
+ * The crawl door: the fleet's day pass ($1 a day over x402, or any coin / PayPal through
+ * CoinPay's hosted checkout on /crawl) for AI training crawlers, headless browsers and
+ * SEO scrapers. People, verified Googlebot/Bingbot and the AI chat/search fetchers pass
+ * through untouched; a signed-in session is never charged.
+ *
+ * Separate from the transcription gateway above, which prices agent minutes for the throttle.
+ */
+export const crawlGateway =
+  config.x402.scopedKey && config.x402.payTo
+    ? createGateway({
+        siteUrl: config.siteUrl,
+        siteName: 'typeheard',
+        coinpay: { apiKey: config.x402.scopedKey, baseUrl: config.coinpay.baseUrl },
+        payTo: config.x402.payTo,
+        // Its own pass secret: a crawl pass reads pages, it does not buy transcription.
+        secret: `${config.x402.scopedKey}:crawl`,
+        contact: 'mailto:anthony@profullstack.com',
+        openPaths: [...OPEN_PATHS, ...UNMETERED_PATHS],
+        exempt: (request) =>
+          Boolean(request.headers.get('cookie')?.includes(config.session.cookie)),
+      })
+    : null;
+if (crawlGateway) app.use('*', x402Gateway(crawlGateway));
+
+/** A transcription pass this site minted (or a Power Key), not merely a header naming one. */
+export async function hasAgentPass(request) {
+  const token = gateway?.passFrom(request);
+  return Boolean(token && (await gateway.verifyPass(token).catch(() => false)));
+}
 
 /**
  * Meter requests, and sell a pass to whoever goes over. A signed-in person is
@@ -382,8 +414,9 @@ app.post('/api/v1/transcripts', async (c) => {
   }
 
   const { user, apiKeyId } = await caller(c);
-  // A live x402 pass means this request is already paid for. The gateway put it there.
-  const paidAgent = Boolean(c.req.header('x-crawl-pass') || c.req.header('x-payment'));
+  // A live x402 pass means this request is already paid for. Verified here, not just
+  // seen: the throttle lets an under-limit request through whatever header it carries.
+  const paidAgent = await hasAgentPass(c.req.raw);
   const wholeFileFree = config.pricing.freeForAll || durationSec <= config.pricing.previewSeconds;
 
   let spend = null;
