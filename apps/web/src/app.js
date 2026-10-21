@@ -547,25 +547,24 @@ app.post('/api/topup', async (c) => {
   // Only the published bundles: an arbitrary amount lets a caller name its own price.
   if (!bundle) return c.json({ error: 'pick one of the published bundles' }, 400);
 
-  const chain = String(body.chain ?? config.coinpay.defaultChain).toUpperCase();
-  if (!config.coinpay.chains.includes(chain)) {
-    return c.json({ error: `unsupported chain ${chain}`, chains: config.coinpay.chains }, 400);
-  }
+  // No chain here: CoinPay's hosted checkout offers every coin the business holds a
+  // wallet for, plus PayPal. A `chain` field from an old client is ignored.
 
   try {
     const { checkoutUrl, paymentRef } = await pay.createCheckout({
       user,
+      email: user.email,
+      accountId: String(user.id),
       amountCents: bundle.cents,
       description: `${bundle.credits} typeheard minutes`,
       metadata: { credits: String(bundle.credits) },
-      blockchain: chain,
       successUrl: `${config.siteUrl}/account`,
       cancelUrl: `${config.siteUrl}/pricing`,
     });
     return c.json({ checkout_url: checkoutUrl, payment_ref: paymentRef });
   } catch (err) {
     const message = String(err?.message ?? err);
-    console.error(`[topup] checkout failed for ${user.id} on ${chain}: ${message}`);
+    console.error(`[topup] checkout failed for ${user.id}: ${message}`);
     return c.json({ error: 'could not start checkout', detail: message.slice(0, 200) }, 502);
   }
 });
