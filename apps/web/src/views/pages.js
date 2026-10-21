@@ -305,21 +305,6 @@ export function Pricing({ config }) {
       </tr>`,
     )
     .join('');
-  const LABELS = {
-    USDC_POL: 'USDC on Polygon',
-    USDC_SOL: 'USDC on Solana',
-    USDC_ETH: 'USDC on Ethereum',
-    SOL: 'Solana',
-    POL: 'Polygon',
-    ETH: 'Ethereum',
-    BTC: 'Bitcoin',
-  };
-  const options = config.coinpay.chains
-    .map(
-      (ch) =>
-        `<option value="${ch}"${ch === config.coinpay.defaultChain ? ' selected' : ''}>${esc(LABELS[ch] ?? ch)}</option>`,
-    )
-    .join('');
   const free = Math.round(config.pricing.previewSeconds / 60);
 
   return page({
@@ -335,8 +320,7 @@ No subscription, nothing to cancel, and minutes never expire. The first ${free} 
 any file stay free whether you have credit or not.</p>
 
 <div class="card">
-<p style="margin:0 0 14px"><label for="chain" class="muted">Pay with</label><br>
-<select id="chain" style="margin-top:6px">${options}</select></p>
+<p class="muted" style="margin:0 0 14px">Pay with any major coin or PayPal on the CoinPay checkout page.</p>
 <table>
 <tr><th>Top up</th><th>Minutes</th><th>Works out at</th><th></th></tr>
 ${rows}
@@ -358,7 +342,7 @@ ${config.x402.maxMinutes} minutes, settled in USDC with no account. See the <a h
 const err=document.getElementById('buyerr');
 document.querySelectorAll('button[data-cents]').forEach(b=>b.addEventListener('click',async()=>{
   const was=b.textContent;b.disabled=true;b.textContent='Starting…';err.textContent='';
-  try{const body=new FormData();body.append('cents',b.dataset.cents);body.append('chain',document.getElementById('chain').value);
+  try{const body=new FormData();body.append('cents',b.dataset.cents);
     const res=await fetch('/api/topup',{method:'POST',body});
     if(res.status===401){location.href='/signin';return}
     const j=await res.json().catch(()=>({}));
