@@ -70,7 +70,7 @@ select{font:inherit;padding:10px 12px;border:1px solid var(--line);border-radius
 .tab{padding:9px 14px;text-decoration:none;color:var(--mut);border-bottom:2px solid transparent;margin-bottom:-1px}
 .tab:hover{color:var(--fg)}
 .tab.on{color:var(--fg);border-bottom-color:var(--accent);font-weight:600}
-.cp-ad{display:block;height:0;overflow:hidden;margin-top:20px}
+.cp-ad{display:block;height:0;overflow:hidden;margin-top:10px}
 .cp-ad[data-cp-filled]{height:auto;overflow:visible}
 footer.pfs-footer{margin-top:80px;font-size:14px;--pfs-footer-muted:var(--mut);border-top-color:var(--line)}
 footer.pfs-footer nav{margin-left:0;font-size:inherit}
@@ -78,7 +78,7 @@ footer.pfs-footer .pfs-footer__inner{flex-direction:row;flex-wrap:wrap;justify-c
 `;
 
 // One CrawlProof ad unit at the top of the content (never against the footer), only on the public marketing
-// pages (Landing, Pricing, Docs) -- never on account, sign-in or transcripts.
+// inner pages (Pricing, Docs) -- never on the homepage, account, sign-in or transcripts.
 // ad.js fills it at DOMContentLoaded; it stays zero-height until filled.
 const AD_SLOT = '8bb11c40-c297-471a-97cf-1288bb19e84e';
 const AD = `<div class="wrap"><aside class="cp-ad" data-cp-ad data-slot="${AD_SLOT}" data-format="text_link"></aside></div>
@@ -150,7 +150,6 @@ export function Landing({ config, user, balance }) {
   const cheapest = config.pricing.topups[0];
   const perHour = ((cheapest.cents / cheapest.credits) * 60) / 100;
   return page({
-    ad: true,
     config,
     title: 'typeheard: drop a recording, get the transcript',
     description: `Transcribe interviews, lectures, podcasts and voice memos you already have. The first ${free} minutes of any file are free; after that about $${perHour.toFixed(2)} an hour, no subscription.`,
