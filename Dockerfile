@@ -21,7 +21,7 @@ RUN sh /opt/whisper.cpp/models/download-ggml-model.sh "$WHISPER_MODEL_NAME" \
  && install -Dm644 "/opt/whisper.cpp/models/ggml-$WHISPER_MODEL_NAME.bin" "/out/ggml-$WHISPER_MODEL_NAME.bin"
 
 # ----------------------------------------------------------------- JS deps --
-FROM oven/bun:1.3.14-slim AS deps
+FROM oven/bun:1.4.4-slim AS deps
 WORKDIR /app
 COPY package.json bun.lock* bunfig.toml ./
 COPY apps/web/package.json apps/web/
@@ -36,7 +36,7 @@ COPY packages/transcribe/package.json packages/transcribe/
 RUN bun install --frozen-lockfile || bun install
 
 # ----------------------------------------------------------------- runtime --
-FROM oven/bun:1.3.14-slim AS runtime
+FROM oven/bun:1.4.4-slim AS runtime
 ARG WHISPER_MODEL_NAME=base
 ENV NODE_ENV=production \
     XDG_DATA_HOME=/app/.data \
