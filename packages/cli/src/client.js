@@ -87,6 +87,25 @@ export const get = (auth, id) => call(auth, `/api/v1/transcripts/${encodeURIComp
 export const list = (auth) => call(auth, '/api/v1/transcripts');
 export const me = (auth) => call(auth, '/api/v1/me');
 
+/** Redeem a credit code for minutes on this account. */
+export const redeem = (auth, code) =>
+  call(auth, '/api/v1/credits/redeem', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ code }),
+  });
+
+/** Invites left, invites sent, and your open ?ref= link. */
+export const invites = (auth) => call(auth, '/api/v1/invites');
+
+/** Make a single-use invite link. The link is in the answer and nowhere else. */
+export const createInvite = (auth, note) =>
+  call(auth, '/api/v1/invites', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(note ? { note } : {}),
+  });
+
 export async function text(auth, id, format = 'txt') {
   if (!FORMATS.includes(format)) throw new Error(`format is one of ${FORMATS.join(', ')}`);
   return call(auth, `/api/v1/transcripts/${encodeURIComponent(id)}/${format}`);

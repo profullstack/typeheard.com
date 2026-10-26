@@ -426,6 +426,7 @@ function AccountNav(active) {
     ['/account', 'Minutes'],
     ['/account/history', 'Transcripts'],
     ['/account/keys', 'API keys'],
+    ['/invites', 'Invites'],
   ];
   return `<nav class="tabs">${tabs
     .map(
@@ -446,6 +447,9 @@ export function Account({
   contact,
   contactError,
   contactSaved,
+  redeemError = null,
+  redeemed = 0,
+  invited = 0,
 }) {
   const rows = ledger
     .map(
@@ -461,12 +465,23 @@ export function Account({
 <h1>Account</h1>
 <p class="lede">${esc(user.email)}</p>
 ${AccountNav('/account')}
+${invited ? `<p class="note">Welcome. Your invite added ${invited.toLocaleString()} minutes, and the friend who invited you got the same.</p>` : ''}
 <div class="card">
   <div class="muted">Minutes</div>
   <div class="big">${balance.toLocaleString()}</div>
   <p class="muted" style="margin:4px 0 0">One minute transcribes one minute of audio. They do not expire.</p>
   <p style="margin:14px 0 0"><a class="btn" href="/pricing">Top up</a> <a class="btn ghost" href="/">Transcribe a file</a></p>
 </div>
+
+<h2 id="code">Have a code?</h2>
+${redeemed ? `<p class="note">Code redeemed: ${redeemed.toLocaleString()} minutes added.</p>` : ''}
+${redeemError ? `<p class="note">${esc(redeemError)}</p>` : ''}
+<form method="post" action="/account/redeem" class="card" style="max-width:460px">
+  <label for="code" class="muted">Credit code</label>
+  <input id="code" name="code" type="text" required maxlength="48" autocomplete="off" spellcheck="false" placeholder="TH-XXXX-XXXX-XXXX-XXXX" style="margin:6px 0 14px">
+  <button class="btn">Redeem</button>
+  <p class="muted" style="margin:12px 0 0;font-size:14px">The minutes land on this account and never expire. Want to bring someone? <a href="/invites">You have invites</a>.</p>
+</form>
 
 <h2>Passkeys</h2>
 <div class="card">
@@ -551,6 +566,57 @@ const o=document.getElementById('out');o.style.display='block';o.textContent=j.k
   });
 }
 
+export function Invites({ user, config, summary, created = null, error = null }) {
+  const { quota, invites, bonus_minutes: bonus } = summary;
+  const rows = invites
+    .map((i) => {
+      const state = i.used
+        ? 'joined'
+        : i.revoked
+          ? 'withdrawn'
+          : i.expires_at && i.expires_at < new Date().toISOString()
+            ? 'expired'
+            : 'waiting';
+      return `<tr><td>${esc(i.note) || '<span class="muted">no note</span>'}</td><td class="muted">${state}</td>
+        <td class="muted">${esc(String(i.created_at).slice(0, 10))}</td></tr>`;
+    })
+    .join('');
+  return page({
+    config,
+    title: 'Invites - typeheard',
+    description: 'Invite someone to typeheard. You both get minutes.',
+    body: `
+<h1>Invites</h1>
+<p class="lede">${esc(user.email)}</p>
+${AccountNav('/invites')}
+${error ? `<p class="note">${esc(error)}</p>` : ''}
+${
+  created
+    ? `<div class="note"><strong>Your invite link</strong>, shown once. Send it to one person:
+  <pre style="margin:10px 0 0">${esc(created.url)}</pre></div>`
+    : ''
+}
+<div class="card">
+  <p style="margin:0 0 12px">You have <strong>${quota.left}</strong> of ${quota.total} invites left. Each link works once, for 30 days.${bonus > 0 ? ` When someone makes an account through it, you each get <strong>${bonus}</strong> minutes.` : ''}</p>
+  ${
+    quota.left > 0
+      ? `<form method="post" action="/invites" class="row" style="margin:0">
+    <input type="text" name="note" maxlength="120" placeholder="Who is it for? (only you see this)" style="flex:1;min-width:200px">
+    <button class="btn">Make an invite link</button>
+  </form>`
+      : '<p class="muted" style="margin:0">All used. Invites are scarce on purpose.</p>'
+  }
+</div>
+${invites.length ? `<h2>Sent</h2><div class="card"><table><tr><th>For</th><th>State</th><th>Made</th></tr>${rows}</table></div>` : ''}
+<h2>Your link</h2>
+<div class="card">
+  <p class="muted" style="margin:0 0 10px">Open and unlimited: anyone who signs up after following it is credited to you.</p>
+  <pre style="margin:0">${esc(summary.affiliate_url)}</pre>
+  ${summary.joined ? `<p class="muted" style="margin:10px 0 0">${summary.joined} ${summary.joined === 1 ? 'person has' : 'people have'} joined on your invites.</p>` : ''}
+</div>`,
+  });
+}
+
 /* -------------------------------------------------------------------- auth -- */
 
 /*
@@ -560,17 +626,27 @@ const o=document.getElementById('out');o.style.display='block';o.textContent=j.k
  */
 const SIGNUP_FIELDS = PROFILE_COLUMNS.filter((f) => f !== 'email');
 
-export function SignIn({ config, error, signup = false, values, errors }) {
+export function SignIn({
+  config,
+  error,
+  signup = false,
+  values,
+  errors,
+  invite = null,
+  bonus = 0,
+}) {
   return page({
     config,
     title: `${signup ? 'Sign up' : 'Sign in'} - typeheard`,
     description: 'Sign in with an emailed link or a passkey. No passwords.',
     body: `
-<h1>${signup ? 'Make an account' : 'Sign in'}</h1>
+<h1>${invite ? 'You were invited' : signup ? 'Make an account' : 'Sign in'}</h1>
+${invite ? `<p class="note">Someone wanted you on typeheard.${bonus > 0 ? ` Make your account with this link and you both get <strong>${bonus}</strong> free minutes of transcription.` : ''}</p>` : ''}
 <p class="lede">${signup ? 'Put in your email and we will send a link. Clicking it makes the account; there is no password to choose.' : 'We will email you a link. If you added a passkey, use that instead.'}</p>
 ${error ? `<p class="note">${esc(error)}</p>` : ''}
 <form class="card" method="post" action="/auth/link" style="max-width:460px">
   ${signup ? '<input type="hidden" name="mode" value="signup">' : ''}
+  ${invite ? `<input type="hidden" name="invite" value="${esc(invite)}">` : ''}
   <label for="email" class="muted">Email</label>
   <input id="email" name="email" type="email" autocomplete="email webauthn" required style="margin:6px 0 14px"${values?.email ? ` value="${esc(values.email)}"` : ''}>
   ${errors?.email ? `<p class="pfs-profile__error" role="alert">${esc(errors.email)}</p>` : ''}

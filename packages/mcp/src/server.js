@@ -8,7 +8,17 @@
 
 import { resolve } from 'node:path';
 import { createInterface } from 'node:readline';
-import { FORMATS, get, list, resolveAuth, text, transcribe } from '@profullstack/typeheard/client';
+import {
+  createInvite,
+  FORMATS,
+  get,
+  invites,
+  list,
+  redeem,
+  resolveAuth,
+  text,
+  transcribe,
+} from '@profullstack/typeheard/client';
 
 const PROTOCOL_VERSION = '2025-06-18';
 
@@ -49,6 +59,35 @@ const TOOLS = [
     description: "The account's transcripts, newest first. Needs TYPEHEARD_API_KEY.",
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
   },
+  {
+    name: 'redeem_code',
+    description:
+      'Redeem a typeheard credit code (TH-XXXX-...) for transcription minutes on the account. Needs TYPEHEARD_API_KEY.',
+    inputSchema: {
+      type: 'object',
+      properties: { code: { type: 'string' } },
+      required: ['code'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'invites',
+    description:
+      "The account's invites: how many are left, which were used, and its open ?ref= link. Needs TYPEHEARD_API_KEY.",
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+  },
+  {
+    name: 'create_invite',
+    description:
+      'Make a single-use invite link to typeheard (each account has a few). Whoever makes an account through it and the inviter both get bonus minutes. Needs TYPEHEARD_API_KEY.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        note: { type: 'string', description: 'Who it is for; only the inviter sees it.' },
+      },
+      additionalProperties: false,
+    },
+  },
 ];
 
 const textResult = (value, isError = false) => ({
@@ -84,6 +123,12 @@ async function callTool(name, args) {
       return textResult(
         (await list(auth)).transcripts.map(({ text: _t, downloads: _d, ...rest }) => rest),
       );
+    case 'redeem_code':
+      return textResult(await redeem(auth, String(args.code ?? '')));
+    case 'invites':
+      return textResult(await invites(auth));
+    case 'create_invite':
+      return textResult(await createInvite(auth, args.note));
     default:
       throw new Error(`unknown tool ${name}`);
   }

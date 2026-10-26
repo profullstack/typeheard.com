@@ -6,6 +6,8 @@
  *   typeheard list              your transcripts
  *   typeheard get <id> [--format md]
  *   typeheard me                minutes left
+ *   typeheard redeem <code>     add a credit code's minutes to your account
+ *   typeheard invites [new [note]]  your invites, or make a new invite link
  *   typeheard tui               the same, as a screen
  *
  * TYPEHEARD_API_KEY and TYPEHEARD_URL override the saved config.
@@ -13,7 +15,19 @@
 import { readFileSync } from 'node:fs';
 import { writeFile } from 'node:fs/promises';
 import { createInterface } from 'node:readline/promises';
-import { FORMATS, get, list, me, resolveAuth, saveConfig, text, transcribe } from './client.js';
+import {
+  createInvite,
+  FORMATS,
+  get,
+  invites,
+  list,
+  me,
+  redeem,
+  resolveAuth,
+  saveConfig,
+  text,
+  transcribe,
+} from './client.js';
 
 const HELP = `typeheard: drop a recording, get what was said.
 
@@ -22,6 +36,9 @@ const HELP = `typeheard: drop a recording, get what was said.
   typeheard list               your transcripts
   typeheard get ID [--format md]
   typeheard me                 minutes left on your account
+  typeheard redeem CODE        add a credit code's minutes to your account
+  typeheard invites            invites left and sent, and your ?ref= link
+  typeheard invites new [NOTE] make a single-use invite link (you both get minutes)
   typeheard tui                your transcripts and uploads, in the terminal
   typeheard --version
 
@@ -83,6 +100,29 @@ export async function main(argv = process.argv.slice(2)) {
     case 'me': {
       const who = await me(auth);
       console.log(`${who.email}  ${who.minutes} minutes`);
+      return 0;
+    }
+    case 'redeem': {
+      if (!rest[0]) throw new Error('typeheard redeem <code>');
+      const out = await redeem(auth, rest.join(' '));
+      console.log(`Added ${out.added_minutes} minutes. You have ${out.minutes}.`);
+      return 0;
+    }
+    case 'invites': {
+      if (rest[0] === 'new' || rest[0] === 'create') {
+        const made = await createInvite(auth, rest.slice(1).join(' '));
+        console.log(made.url);
+        say(`Works once, for 30 days. ${made.quota.left} invite(s) left. Shown once.`);
+        return 0;
+      }
+      const s = await invites(auth);
+      console.log(`${s.quota.left} of ${s.quota.total} invites left; ${s.joined} joined.`);
+      for (const i of s.invites) {
+        console.log(
+          `  ${i.used ? 'joined ' : i.revoked ? 'revoked' : 'waiting'}  ${i.created_at.slice(0, 10)}  ${i.note}`,
+        );
+      }
+      console.log(`Your link: ${s.affiliate_url}`);
       return 0;
     }
     case 'list':

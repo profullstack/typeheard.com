@@ -44,4 +44,7 @@ export const UNMETERED_PATHS = [
   // CoinPay's callbacks share its egress IPs with every other merchant, so a 402
   // here would leave a paid top-up uncredited. The signature is the gate.
   '/webhooks/',
+  // Invite links (/i/<code>): a chat app's link preview, or a friend on a shared IP,
+  // must never meet a 402 or a limit before they have even seen the page.
+  '/i/',
 ];

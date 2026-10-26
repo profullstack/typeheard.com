@@ -53,6 +53,22 @@ A job is a row. The upload is written to `DATA_DIR`, the row is queued, and a wo
 claims it, transcribes it and stores the segments. The upload is deleted as soon as the
 words are out. Jobs survive a restart. A failure refunds the minutes it was charged.
 
+## Credit codes and invites
+
+- **Credit codes** (`TH-XXXX-XXXX-XXXX-XXXX`, from `@profullstack/redeem-credits`, stored only as
+  hashes) add transcription minutes to `credit_ledger`, once per account per code. Redeem on
+  `/account` ("Have a code?"), `POST /api/v1/credits/redeem`, `typeheard redeem <code>` or the MCP
+  tool `redeem_code`. Mint on the box:
+  `docker exec typeheardcom-app-1 bun apps/web/src/admin/codes.js mint --minutes 300 --label "for Ada"`
+  (`list`, `revoke <id>`, `reconcile <user id>`, `quota <user id> <total>`).
+- **Invites** (`@profullstack/affiliates`): three single-use links per account at `/invites`, each
+  `/i/<code>` for 30 days. The code rides the emailed sign-in link, and pays `INVITE_BONUS_MINUTES`
+  (default 30) to both people only when that link creates the account, the two are not one mailbox,
+  the new address is not a throwaway one, the inviter's account is a day old
+  (`INVITE_MIN_INVITER_AGE_HOURS`) and the inviter has had fewer than 10 bonuses in 30 days.
+- **`?ref=`** links are first touch, kept in the `referral_code` cookie and recorded in
+  `aff_attributions` when the link creates an account.
+
 ## Run it yourself
 
 ```bash
