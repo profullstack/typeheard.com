@@ -1,6 +1,6 @@
 {
   "name": "@profullstack/typeheard",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Transcribe audio and video from the terminal: typeheard <file>. Also a TUI and the client the MCP server uses.",
   "type": "module",
   "license": "MIT",
@@ -27,7 +27,7 @@
     "README.md"
   ],
   "dependencies": {
-    "@profullstack/hqtui": "^0.8.0"
+    "@profullstack/hqtui": "^0.11.1"
   },
   "keywords": [
     "transcription",
