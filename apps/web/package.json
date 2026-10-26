@@ -14,6 +14,7 @@
     "@typeheard/db": "workspace:*",
     "@typeheard/notify": "workspace:*",
     "@typeheard/payments": "workspace:*",
+    "@profullstack/profile": "0.1.2",
     "@profullstack/throttle": "^0.3.4",
     "@profullstack/x402-gateway": "^0.11.0",
     "hono": "^4.10.3",
