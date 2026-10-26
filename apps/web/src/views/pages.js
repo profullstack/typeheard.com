@@ -5,6 +5,11 @@
  * a page of text. A build step for that is a cost with nothing on the other side.
  */
 
+import {
+  COLUMNS as PROFILE_COLUMNS,
+  PROFILE_ENHANCE_SCRIPT,
+  renderProfileFields,
+} from '@profullstack/profile';
 import { siteFooter } from './footer.js';
 
 const esc = (s) =>
@@ -72,6 +77,13 @@ select{font:inherit;padding:10px 12px;border:1px solid var(--line);border-radius
 .tab.on{color:var(--fg);border-bottom-color:var(--accent);font-weight:600}
 .cp-ad{display:block;height:0;overflow:hidden;margin-top:10px}
 .cp-ad[data-cp-filled]{height:auto;overflow:visible}
+/* The shared profile fields (@profullstack/profile renderProfileFields), made to read
+   like the email box above them. */
+.pfs-profile{border:0;padding:0;margin:0;min-width:0}
+.pfs-profile__row label{display:block;color:var(--mut)}
+.pfs-profile__row input{font:inherit;padding:11px 12px;border:1px solid var(--line);border-radius:9px;background:var(--card);color:var(--fg);width:100%;margin:6px 0 14px}
+.pfs-profile__optional{font-size:14px}
+.pfs-profile__error{color:#c33;font-size:14px;margin:-8px 0 14px}
 footer.pfs-footer{margin-top:80px;font-size:14px;--pfs-footer-muted:var(--mut);border-top-color:var(--line)}
 footer.pfs-footer nav{margin-left:0;font-size:inherit}
 footer.pfs-footer .pfs-footer__inner{flex-direction:row;flex-wrap:wrap;justify-content:center;gap:6px 18px}
@@ -425,7 +437,16 @@ function AccountNav(active) {
 
 const PASSKEY_JS = `<script src="https://unpkg.com/@simplewebauthn/browser@13/dist/bundle/index.umd.min.js"></script>`;
 
-export function Account({ user, balance, ledger, passkeys, config }) {
+export function Account({
+  user,
+  balance,
+  ledger,
+  passkeys,
+  config,
+  contact,
+  contactError,
+  contactSaved,
+}) {
   const rows = ledger
     .map(
       (h) => `<tr><td>${h.delta > 0 ? '+' : ''}${h.delta}</td><td>${esc(h.reason)}</td>
@@ -452,6 +473,15 @@ ${AccountNav('/account')}
   <p class="muted" style="margin:0 0 12px">${passkeys.length ? `${passkeys.length} passkey${passkeys.length === 1 ? '' : 's'} on this account.` : 'None yet. A passkey signs you in with your fingerprint or face instead of an emailed link.'}</p>
   <button class="btn small" id="addkey">Add a passkey</button> <span id="keymsg" class="muted"></span>
 </div>
+
+<h2 id="contact">Contact details</h2>
+<p class="muted">Private to your account. Sent with ${esc(user.email)}.</p>
+${contactError ? `<p class="note">${esc(contactError)}</p>` : ''}
+${contactSaved ? '<p class="muted">Contact details saved.</p>' : ''}
+<form method="post" action="/account/contact" class="card" style="max-width:460px">
+  ${renderProfileFields({ fields: SIGNUP_FIELDS, values: contact ?? {} })}
+  <button class="btn">Save contact details</button>
+</form>
 
 <h2>History</h2>
 <div class="card">
@@ -523,7 +553,14 @@ const o=document.getElementById('out');o.style.display='block';o.textContent=j.k
 
 /* -------------------------------------------------------------------- auth -- */
 
-export function SignIn({ config, error, signup = false }) {
+/*
+ * The rest of the shared profile, asked for on the signup page only. Email is this
+ * form's own box, so the package renders the other five. A plain sign-in never sees or
+ * needs them: the same link still makes an account for an address it has not seen.
+ */
+const SIGNUP_FIELDS = PROFILE_COLUMNS.filter((f) => f !== 'email');
+
+export function SignIn({ config, error, signup = false, values, errors }) {
   return page({
     config,
     title: `${signup ? 'Sign up' : 'Sign in'} - typeheard`,
@@ -533,12 +570,16 @@ export function SignIn({ config, error, signup = false }) {
 <p class="lede">${signup ? 'Put in your email and we will send a link. Clicking it makes the account; there is no password to choose.' : 'We will email you a link. If you added a passkey, use that instead.'}</p>
 ${error ? `<p class="note">${esc(error)}</p>` : ''}
 <form class="card" method="post" action="/auth/link" style="max-width:460px">
+  ${signup ? '<input type="hidden" name="mode" value="signup">' : ''}
   <label for="email" class="muted">Email</label>
-  <input id="email" name="email" type="email" autocomplete="email webauthn" required style="margin:6px 0 14px">
+  <input id="email" name="email" type="email" autocomplete="email webauthn" required style="margin:6px 0 14px"${values?.email ? ` value="${esc(values.email)}"` : ''}>
+  ${errors?.email ? `<p class="pfs-profile__error" role="alert">${esc(errors.email)}</p>` : ''}
+  ${signup ? renderProfileFields({ fields: SIGNUP_FIELDS, values, errors }) : ''}
   <button class="btn">Email me a link</button>
 </form>
 <p style="margin-top:18px"><button class="btn ghost" id="pk">Sign in with a passkey</button> <span id="pkmsg" class="muted"></span></p>
 <p class="muted">${signup ? 'Already have one? <a href="/signin">Sign in</a>.' : 'New here? The same link makes an account: <a href="/signup">sign up</a>.'}</p>
+${signup ? `<script>${PROFILE_ENHANCE_SCRIPT}</script>` : ''}
 ${PASSKEY_JS}
 <script>
 document.getElementById('pk').addEventListener('click',async()=>{const msg=document.getElementById('pkmsg');
