@@ -14,7 +14,7 @@
     "@profullstack/redeem-credits": "^0.2.0",
     "@profullstack/throttle": "^0.4.0",
     "@profullstack/webhooks": "0.2.1",
-    "@profullstack/x402-gateway": "^0.13.1",
+    "@profullstack/x402-gateway": "^0.15.3",
     "@typeheard/auth": "workspace:*",
     "@typeheard/config": "workspace:*",
     "@typeheard/db": "workspace:*",
