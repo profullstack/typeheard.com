@@ -8,6 +8,7 @@
  *   typeheard me                minutes left
  *   typeheard redeem <code>     add a credit code's minutes to your account
  *   typeheard invites [new [note]]  your invites, or make a new invite link
+ *   typeheard webhooks          your webhook endpoints; webhook add|test|rotate|rm|log
  *   typeheard tui               the same, as a screen
  *
  * TYPEHEARD_API_KEY and TYPEHEARD_URL override the saved config.
@@ -16,6 +17,7 @@ import { readFileSync } from 'node:fs';
 import { writeFile } from 'node:fs/promises';
 import { createInterface } from 'node:readline/promises';
 import {
+  addWebhook,
   createInvite,
   FORMATS,
   get,
@@ -23,10 +25,15 @@ import {
   list,
   me,
   redeem,
+  removeWebhook,
   resolveAuth,
+  rotateWebhook,
   saveConfig,
+  testWebhook,
   text,
   transcribe,
+  webhookLog,
+  webhooks,
 } from './client.js';
 
 const HELP = `typeheard: drop a recording, get what was said.
@@ -39,6 +46,10 @@ const HELP = `typeheard: drop a recording, get what was said.
   typeheard redeem CODE        add a credit code's minutes to your account
   typeheard invites            invites left and sent, and your ?ref= link
   typeheard invites new [NOTE] make a single-use invite link (you both get minutes)
+  typeheard webhooks           your webhook endpoints and the events typeheard sends
+  typeheard webhook add URL [EVENTS...]  POST transcript.completed/failed to URL (prints the secret)
+  typeheard webhook test|rotate|rm ID    send a test, replace the secret, or remove it
+  typeheard webhook log [ID]   recent deliveries
   typeheard tui                your transcripts and uploads, in the terminal
   typeheard --version
 
@@ -123,6 +134,48 @@ export async function main(argv = process.argv.slice(2)) {
         );
       }
       console.log(`Your link: ${s.affiliate_url}`);
+      return 0;
+    }
+    case 'webhooks': {
+      const r = await webhooks(auth);
+      for (const w of r.endpoints) {
+        console.log(
+          `${w.id}  ${w.url}  ${w.events.join(',')}${w.enabled ? '' : `  OFF (${w.disabled_reason ?? 'disabled'})`}`,
+        );
+      }
+      if (!r.endpoints.length) say('No webhooks yet: typeheard webhook add <url>');
+      say(`events: ${r.event_types.join(', ')}`);
+      return 0;
+    }
+    case 'webhook': {
+      const [sub, arg, ...more] = rest;
+      const need = (v, what) => {
+        if (!v) throw new Error(`typeheard webhook ${sub} <${what}>`);
+        return v;
+      };
+      if (sub === 'add') {
+        const r = await addWebhook(auth, need(arg, 'url'), more);
+        console.log(`${r.endpoint.id} -> ${r.endpoint.url}  ${r.endpoint.events.join(',')}`);
+        console.log(`signing secret: ${r.secret}`);
+      } else if (sub === 'test') {
+        const r = await testWebhook(auth, need(arg, 'id'));
+        console.log(r.ok ? `delivered (HTTP ${r.status})` : `failed: ${r.error}`);
+        return r.ok ? 0 : 1;
+      } else if (sub === 'rotate') {
+        const r = await rotateWebhook(auth, need(arg, 'id'));
+        console.log(`new signing secret: ${r.secret}`);
+      } else if (sub === 'rm' || sub === 'remove' || sub === 'delete') {
+        await removeWebhook(auth, need(arg, 'id'));
+        say('removed');
+      } else if (sub === 'log') {
+        const r = await webhookLog(auth, arg);
+        for (const d of r.deliveries) {
+          console.log(
+            `${d.created_at.slice(0, 19)}  ${d.event_type.padEnd(22)} ${d.status.padEnd(9)} x${d.attempts} ${d.last_status ?? ''} ${d.last_error ?? ''}`.trimEnd(),
+          );
+        }
+        if (!r.deliveries.length) say('no deliveries yet');
+      } else throw new Error('typeheard webhook add|test|rotate|rm|log');
       return 0;
     }
     case 'list':

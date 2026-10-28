@@ -106,6 +106,30 @@ export const createInvite = (auth, note) =>
     body: JSON.stringify(note ? { note } : {}),
   });
 
+/* Webhooks: typeheard POSTs transcript.completed / transcript.failed to your URL. */
+const json = (method, body) => ({
+  method,
+  headers: { 'content-type': 'application/json' },
+  ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+});
+const hookPath = (id, rest = '') => `/api/v1/webhooks/${encodeURIComponent(id)}${rest}`;
+
+/** Your endpoints and the events typeheard sends: `{ endpoints, event_types }`. */
+export const webhooks = (auth) => call(auth, '/api/v1/webhooks');
+/** Add an endpoint. The answer carries its signing secret. */
+export const addWebhook = (auth, url, events = [], description = '') =>
+  call(
+    auth,
+    '/api/v1/webhooks',
+    json('POST', { url, ...(events.length ? { events } : {}), description }),
+  );
+export const removeWebhook = (auth, id) => call(auth, hookPath(id), json('DELETE'));
+export const testWebhook = (auth, id) => call(auth, hookPath(id, '/test'), json('POST', {}));
+export const rotateWebhook = (auth, id) => call(auth, hookPath(id, '/rotate'), json('POST', {}));
+/** Recent deliveries, for one endpoint or all of them. */
+export const webhookLog = (auth, id) =>
+  call(auth, id ? hookPath(id, '/deliveries') : '/api/v1/webhooks/deliveries');
+
 export async function text(auth, id, format = 'txt') {
   if (!FORMATS.includes(format)) throw new Error(`format is one of ${FORMATS.join(', ')}`);
   return call(auth, `/api/v1/transcripts/${encodeURIComponent(id)}/${format}`);

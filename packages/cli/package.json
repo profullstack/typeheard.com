@@ -1,6 +1,6 @@
 {
   "name": "@profullstack/typeheard",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Transcribe audio and video from the terminal: typeheard <file>. Also a TUI and the client the MCP server uses.",
   "type": "module",
   "license": "MIT",

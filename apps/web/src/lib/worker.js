@@ -14,6 +14,7 @@ import { unlink } from 'node:fs/promises';
 import { config } from '@typeheard/config';
 import * as q from '@typeheard/db/queries';
 import { transcribeFile } from '@typeheard/transcribe';
+import { notifyTranscript } from './webhooks.js';
 
 let running = 0;
 let stopped = false;
@@ -37,24 +38,34 @@ async function work(row) {
     console.log(
       `[worker] ${row.id} done: ${Math.round(result.transcribedSec)}s of audio in ${result.ms}ms`,
     );
+    await notifyTranscript(row, {
+      status: 'done',
+      transcribedSec: result.transcribedSec,
+      language: result.language,
+    });
   } catch (err) {
     const message = String(err?.message ?? err);
     console.error(`[worker] ${row.id} failed: ${message}`);
-    await q.failTranscript({ id: row.id, error: message.split('\n')[0] }).catch(() => {});
+    const error = message.split('\n')[0];
+    await q.failTranscript({ id: row.id, error }).catch(() => {});
+    let refunded = 0;
     if (row.user_id && row.minutes_charged > 0) {
-      await q
+      refunded = await q
         .refundCredits({
           userId: row.user_id,
           credits: row.minutes_charged,
           reason: 'transcription failed',
         })
-        .catch((refundErr) =>
+        .then(() => row.minutes_charged)
+        .catch((refundErr) => {
           // Loud: the customer paid for work that did not happen and the repair failed too.
           console.error(
             `[worker] REFUND FAILED for ${row.user_id}: ${refundErr?.message ?? refundErr}`,
-          ),
-        );
+          );
+          return 0;
+        });
     }
+    await notifyTranscript(row, { status: 'failed', error, refunded });
   } finally {
     if (row.upload_path) await unlink(row.upload_path).catch(() => {});
   }

@@ -407,7 +407,19 @@ typeheard tui                      # your transcripts, in the terminal</pre>
 <h2>MCP</h2>
 <pre>{ "mcpServers": { "typeheard": { "command": "npx", "args": ["-y", "@profullstack/typeheard-mcp"],
   "env": { "TYPEHEARD_API_KEY": "th_…" } } } }</pre>
-<p class="muted">Tools: <code>transcribe_file</code>, <code>get_transcript</code>, <code>list_transcripts</code>.</p>
+<p class="muted">Tools: <code>transcribe_file</code>, <code>get_transcript</code>, <code>list_transcripts</code>,
+and <code>list_webhooks</code>, <code>create_webhook</code>, <code>test_webhook</code>, <code>delete_webhook</code>.</p>
+
+<h2>Webhooks</h2>
+<pre>curl -H "Authorization: Bearer $TYPEHEARD_API_KEY" -H 'content-type: application/json' \\
+  -d '{"url":"https://example.com/hooks/typeheard","events":["transcript.*"]}' \\
+  ${base}/api/v1/webhooks                   # answers { endpoint, secret }</pre>
+<p class="muted">typeheard POSTs <code>transcript.completed</code> and <code>transcript.failed</code> to your URL as
+CloudEvents JSON signed per Standard Webhooks (<code>webhook-id</code>, <code>webhook-timestamp</code>,
+<code>webhook-signature</code>). <code>data</code> has the id, status, <code>status_url</code> and <code>downloads</code>
+links, never the text. Retried for about three days; dedupe on <code>webhook-id</code>.
+Manage them at <a href="/account/webhooks">Account &rarr; Webhooks</a>, with <code>typeheard webhooks</code>,
+or under <code>/api/v1/webhooks</code> (<code>/:id/test</code>, <code>/:id/rotate</code>, <code>/deliveries</code>).</p>
 
 <h2>Agents without an account</h2>
 <p class="muted">Send the upload with no key. A metered caller over the free allowance gets
@@ -426,6 +438,7 @@ function AccountNav(active) {
     ['/account', 'Minutes'],
     ['/account/history', 'Transcripts'],
     ['/account/keys', 'API keys'],
+    ['/account/webhooks', 'Webhooks'],
     ['/invites', 'Invites'],
   ];
   return `<nav class="tabs">${tabs
@@ -563,6 +576,67 @@ ${keys.length ? `<table><tr><th>Key</th><th>Name</th><th>Last used</th></tr>${ke
 document.getElementById('mk').addEventListener('click',async()=>{const r=await fetch('/account/keys',{method:'POST'});const j=await r.json();
 const o=document.getElementById('out');o.style.display='block';o.textContent=j.key?j.key+'\\n\\nShown once. Put it in TYPEHEARD_API_KEY.':(j.error||'failed')});
 </script>`,
+  });
+}
+
+export function Webhooks({
+  user,
+  config,
+  endpoints,
+  deliveries,
+  events,
+  flash = null,
+  secret = null,
+}) {
+  const when = (iso) => (iso ? String(iso).slice(0, 16).replace('T', ' ') : '');
+  const button = (action, id, label, ghost = true) =>
+    `<form method="post" action="/account/webhooks/${action}" style="display:inline;margin:0">
+      <input type="hidden" name="id" value="${esc(id)}">
+      <button class="btn small${ghost ? ' ghost' : ''}">${label}</button></form>`;
+  const rows = endpoints
+    .map(
+      (w) => `<div class="card" style="margin:0 0 12px">
+  <div><code>${esc(w.url)}</code></div>
+  <p class="muted" style="margin:6px 0 10px;font-size:14px">${esc(w.events.join(', '))}${w.description ? ` &middot; ${esc(w.description)}` : ''}${w.enabled ? '' : ` &middot; <strong>off</strong>: ${esc(w.disabled_reason ?? 'disabled')}`}${w.failures ? ` &middot; ${w.failures} failure${w.failures === 1 ? '' : 's'} in a row` : ''}</p>
+  ${secret && secret.id === w.id ? `<div class="note" style="margin:0 0 10px">Signing secret, shown here once (the API can show it again):<pre style="margin:8px 0 0">${esc(secret.value)}</pre></div>` : ''}
+  <div class="row" style="margin:0">${button('test', w.id, 'Send a test')} ${button('rotate', w.id, 'New secret')} ${button('delete', w.id, 'Remove')}</div>
+</div>`,
+    )
+    .join('');
+  const log = deliveries
+    .map(
+      (
+        d,
+      ) => `<tr><td><code>${esc(d.event_type)}</code></td><td class="muted">${esc(d.status)}${d.last_status ? ` (${d.last_status})` : ''}${d.last_error ? ` ${esc(String(d.last_error).slice(0, 80))}` : ''}</td>
+        <td class="muted">${d.attempts}</td><td class="muted">${when(d.created_at)}</td></tr>`,
+    )
+    .join('');
+  return page({
+    config,
+    title: 'Webhooks - typeheard',
+    description: 'Get told when a transcript is ready, instead of polling.',
+    body: `
+<h1>Webhooks</h1>
+<p class="lede">${esc(user.email)}</p>
+${AccountNav('/account/webhooks')}
+${flash ? `<p class="note">${esc(flash)}</p>` : ''}
+<p class="muted">typeheard POSTs to your URL when one of your transcripts is done or has failed:
+${events.map((e) => `<code>${esc(e)}</code>`).join(', ')}. The body is CloudEvents JSON with the id, status and links
+(<code>status_url</code>, <code>downloads</code>), not the text. Requests are signed per
+<a href="https://www.standardwebhooks.com/">Standard Webhooks</a>: check them with
+<code>@profullstack/webhooks</code> or any Standard Webhooks library. Failed deliveries are retried for about three days.</p>
+${rows || '<div class="card" style="margin:0 0 12px"><p class="muted" style="margin:0">No webhooks yet.</p></div>'}
+<form method="post" action="/account/webhooks/add" class="card">
+  <label for="wh-url" class="muted">URL (https)</label>
+  <input id="wh-url" name="url" type="text" inputmode="url" required maxlength="2000" placeholder="https://example.com/hooks/typeheard" style="margin:6px 0 14px">
+  <label for="wh-events" class="muted">Events (blank for all, or e.g. transcript.completed)</label>
+  <input id="wh-events" name="events" type="text" maxlength="200" placeholder="transcript.*" style="margin:6px 0 14px">
+  <label for="wh-desc" class="muted">Note (optional)</label>
+  <input id="wh-desc" name="description" type="text" maxlength="200" style="margin:6px 0 14px">
+  <button class="btn">Add webhook</button>
+</form>
+<p class="muted" style="font-size:14px">Also from the CLI (<code>typeheard webhooks</code>), MCP (<code>create_webhook</code>) and <code>/api/v1/webhooks</code> with an API key.</p>
+${deliveries.length ? `<h2>Recent deliveries</h2><div class="card"><table><tr><th>Event</th><th>Result</th><th>Tries</th><th>When</th></tr>${log}</table></div>` : ''}`,
   });
 }
 

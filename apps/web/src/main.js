@@ -5,6 +5,7 @@ import { migrate } from '@typeheard/db/migrate';
 import * as q from '@typeheard/db/queries';
 import { configurePayments } from '@typeheard/payments';
 import { app } from './app.js';
+import { hooks } from './lib/webhooks.js';
 import { startWorker, stopWorker } from './lib/worker.js';
 
 /*
@@ -76,6 +77,10 @@ const purgeTimer = setInterval(purge, config.retention.purgeIntervalMinutes * 60
 // Jobs queued before a restart are picked up again here.
 await startWorker();
 
+// Customer webhooks: deliveries left waiting by the last container go out now, then the
+// outbox is drained every few seconds. Once per process, never per request.
+hooks.start();
+
 // The port comes from the environment; the dev2 compose file maps it behind nginx.
 const server = Bun.serve({
   port: config.port,
@@ -95,6 +100,7 @@ async function shutdown(signal) {
   clearInterval(purgeTimer);
   await Promise.allSettled([server.stop(true)]);
   stopWorker();
+  hooks.stop();
   await closeDb();
   process.exit(0);
 }
