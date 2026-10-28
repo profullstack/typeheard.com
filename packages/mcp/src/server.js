@@ -9,18 +9,31 @@
 import { resolve } from 'node:path';
 import { createInterface } from 'node:readline';
 import {
+  addWebhook,
   createInvite,
   FORMATS,
   get,
   invites,
   list,
   redeem,
+  removeWebhook,
   resolveAuth,
+  rotateWebhook,
+  testWebhook,
   text,
   transcribe,
+  webhookLog,
+  webhooks,
 } from '@profullstack/typeheard/client';
 
 const PROTOCOL_VERSION = '2025-06-18';
+
+const ID_SCHEMA = {
+  type: 'object',
+  properties: { id: { type: 'string' } },
+  required: ['id'],
+  additionalProperties: false,
+};
 
 const TOOLS = [
   {
@@ -88,6 +101,55 @@ const TOOLS = [
       additionalProperties: false,
     },
   },
+  {
+    name: 'list_webhooks',
+    description:
+      "The account's webhook endpoints, and the events typeheard sends (transcript.completed, transcript.failed). Needs TYPEHEARD_API_KEY.",
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+  },
+  {
+    name: 'create_webhook',
+    description:
+      'Have typeheard POST transcript.completed / transcript.failed to a URL (https) as signed CloudEvents (Standard Webhooks) with the id, status and download links, not the text. Returns the signing secret. Needs TYPEHEARD_API_KEY.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        url: { type: 'string', description: 'https URL to POST to.' },
+        events: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Patterns like "transcript.*" or "transcript.completed"; omit for all.',
+        },
+        description: { type: 'string' },
+      },
+      required: ['url'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'test_webhook',
+    description: 'Send a webhook.test event to one endpoint now and say how it went.',
+    inputSchema: ID_SCHEMA,
+  },
+  {
+    name: 'rotate_webhook',
+    description: "Replace an endpoint's signing secret; the old one stops working at once.",
+    inputSchema: ID_SCHEMA,
+  },
+  {
+    name: 'delete_webhook',
+    description: 'Remove a webhook endpoint.',
+    inputSchema: ID_SCHEMA,
+  },
+  {
+    name: 'webhook_deliveries',
+    description: 'Recent webhook deliveries, for one endpoint (id) or all of them.',
+    inputSchema: {
+      type: 'object',
+      properties: { id: { type: 'string' } },
+      additionalProperties: false,
+    },
+  },
 ];
 
 const textResult = (value, isError = false) => ({
@@ -129,6 +191,25 @@ async function callTool(name, args) {
       return textResult(await invites(auth));
     case 'create_invite':
       return textResult(await createInvite(auth, args.note));
+    case 'list_webhooks':
+      return textResult(await webhooks(auth));
+    case 'create_webhook':
+      return textResult(
+        await addWebhook(
+          auth,
+          String(args.url ?? ''),
+          Array.isArray(args.events) ? args.events.map(String) : [],
+          String(args.description ?? ''),
+        ),
+      );
+    case 'test_webhook':
+      return textResult(await testWebhook(auth, String(args.id ?? '')));
+    case 'rotate_webhook':
+      return textResult(await rotateWebhook(auth, String(args.id ?? '')));
+    case 'delete_webhook':
+      return textResult(await removeWebhook(auth, String(args.id ?? '')));
+    case 'webhook_deliveries':
+      return textResult(await webhookLog(auth, args.id ? String(args.id) : undefined));
     default:
       throw new Error(`unknown tool ${name}`);
   }
@@ -140,7 +221,7 @@ async function handle(req) {
       return {
         protocolVersion: PROTOCOL_VERSION,
         capabilities: { tools: {} },
-        serverInfo: { name: 'typeheard', version: '0.1.0' },
+        serverInfo: { name: 'typeheard', version: '0.2.0' },
       };
     case 'tools/list':
       return { tools: TOOLS };

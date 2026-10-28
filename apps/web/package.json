@@ -1,6 +1,6 @@
 {
   "name": "@typeheard/web",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -13,6 +13,7 @@
     "@profullstack/profile": "0.1.6",
     "@profullstack/redeem-credits": "^0.2.0",
     "@profullstack/throttle": "^0.4.0",
+    "@profullstack/webhooks": "0.2.1",
     "@profullstack/x402-gateway": "^0.13.1",
     "@typeheard/auth": "workspace:*",
     "@typeheard/config": "workspace:*",

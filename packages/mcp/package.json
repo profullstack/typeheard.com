@@ -1,6 +1,6 @@
 {
   "name": "@profullstack/typeheard-mcp",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "MCP server for typeheard.com: transcribe audio and video files from any MCP client.",
   "type": "module",
   "license": "MIT",
@@ -26,7 +26,7 @@
     "README.md"
   ],
   "dependencies": {
-    "@profullstack/typeheard": "^0.1.0"
+    "@profullstack/typeheard": "^0.2.0"
   },
   "keywords": [
     "mcp",

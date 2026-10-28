@@ -9,6 +9,7 @@ import {
   validateProfile,
 } from '@profullstack/profile';
 import { throttle } from '@profullstack/throttle/hono';
+import { webhooksApi } from '@profullstack/webhooks';
 import { createGateway } from '@profullstack/x402-gateway';
 import { x402Gateway } from '@profullstack/x402-gateway/hono';
 import * as auth from '@typeheard/auth';
@@ -41,6 +42,7 @@ import {
 } from './lib/credits.js';
 import { OPEN_PATHS, UNMETERED_PATHS } from './lib/open-paths.js';
 import { decideTier } from './lib/tier.js';
+import { hooks, WEBHOOK_EVENTS } from './lib/webhooks.js';
 import { pump } from './lib/worker.js';
 import { refreshFooter } from './views/footer.js';
 import {
@@ -56,6 +58,7 @@ import {
   Sent,
   SignIn,
   TranscriptPage,
+  Webhooks as WebhooksPage,
 } from './views/pages.js';
 
 export const app = new Hono();
@@ -397,6 +400,97 @@ app.get('/account/keys', async (c) => {
   if (!user) return c.redirect('/signin');
   const keys = await q.listApiKeys(user.id);
   return html(c, Keys({ user, keys, config }));
+});
+
+/* ---------------------------------------------------------------- webhooks -- */
+
+/**
+ * Customer webhooks (@profullstack/webhooks): typeheard POSTs `transcript.completed` and
+ * `transcript.failed` to the account's URLs. The API is the package's own handler,
+ * scoped to whoever the API key (or session) belongs to; the account page below is the
+ * same thing as plain forms.
+ */
+const hookOwner = new WeakMap();
+const hooksApiHandler = webhooksApi(hooks, {
+  basePath: '/api/v1/webhooks',
+  owner: (req) => hookOwner.get(req),
+});
+const webhooksRoute = async (c) => {
+  const { user } = await caller(c);
+  if (!user) return c.json({ error: 'sign in or send an API key' }, 401);
+  hookOwner.set(c.req.raw, String(user.id));
+  return (await hooksApiHandler(c.req.raw)) ?? c.json({ error: 'not found' }, 404);
+};
+app.all('/api/v1/webhooks', webhooksRoute);
+app.all('/api/v1/webhooks/*', webhooksRoute);
+
+async function webhooksPage(c, user, extra = {}, status = 200) {
+  const [endpoints, deliveries] = await Promise.all([
+    hooks.listEndpoints(String(user.id)),
+    hooks.deliveries(String(user.id), { limit: 20 }),
+  ]);
+  return html(
+    c,
+    WebhooksPage({ user, config, endpoints, deliveries, events: WEBHOOK_EVENTS, ...extra }),
+    status,
+  );
+}
+
+app.get('/account/webhooks', async (c) => {
+  const { user, via } = await caller(c);
+  if (!user || via !== 'session') return c.redirect('/signin');
+  return webhooksPage(c, user);
+});
+
+app.post('/account/webhooks/:action{(add|test|rotate|delete)}', async (c) => {
+  const { user, via } = await caller(c);
+  if (!user || via !== 'session') return c.redirect('/signin');
+  const owner = String(user.id);
+  const form = await c.req.parseBody();
+  const id = String(form.id ?? '');
+  try {
+    switch (c.req.param('action')) {
+      case 'add': {
+        const events = String(form.events ?? '')
+          .split(/[\s,]+/)
+          .filter(Boolean);
+        const r = await hooks.createEndpoint(owner, {
+          url: String(form.url ?? '').trim(),
+          events: events.length ? events : undefined,
+          description: String(form.description ?? '').slice(0, 200),
+        });
+        return webhooksPage(c, user, {
+          flash: `Added. Its signing secret is below; it is also available from the API.`,
+          secret: { id: r.endpoint.id, value: r.secret },
+        });
+      }
+      case 'test': {
+        const r = await hooks.test(owner, id);
+        return webhooksPage(c, user, {
+          flash: r.ok ? `Test delivered (HTTP ${r.status}).` : `Test failed: ${r.error}`,
+        });
+      }
+      case 'rotate': {
+        const r = await hooks.rotateSecret(owner, id);
+        return webhooksPage(c, user, {
+          flash: 'New signing secret below. The old one has stopped working.',
+          secret: { id, value: r.secret },
+        });
+      }
+      default:
+        await hooks.deleteEndpoint(owner, id);
+        return webhooksPage(c, user, { flash: 'Webhook removed.' });
+    }
+  } catch (err) {
+    const status = Number(err?.status) >= 400 && Number(err?.status) < 600 ? err.status : 500;
+    if (status === 500) console.error(`[webhooks] ${err?.message ?? err}`);
+    return webhooksPage(
+      c,
+      user,
+      { flash: status === 500 ? 'Something went wrong; try again.' : String(err.message) },
+      status,
+    );
+  }
 });
 
 /* -------------------------------------------------------------------- auth -- */
@@ -934,6 +1028,7 @@ app.get('/llms.txt', (c) =>
 - CLI: curl -fsSL ${config.siteUrl}/install.sh | sh   then: typeheard <file>  (or npx -y @profullstack/typeheard <file>)
 - Credit codes: POST ${config.siteUrl}/api/v1/credits/redeem {"code":"TH-..."} adds minutes to the account.
 - Invites: GET/POST ${config.siteUrl}/api/v1/invites (3 single-use links per account; both sides get bonus minutes).
+- Webhooks: GET/POST ${config.siteUrl}/api/v1/webhooks {"url","events"?} -> signed CloudEvents (Standard Webhooks) for ${WEBHOOK_EVENTS.join(', ')}; ids and links, not the text. Also /:id (PATCH, DELETE), /:id/test, /:id/rotate, /:id/secret, /deliveries.
 - MCP: npx -y @profullstack/typeheard-mcp
 - Docs: ${config.siteUrl}/docs
 `),
