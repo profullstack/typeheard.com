@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { unlink } from 'node:fs/promises';
 import { dirname, extname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { finishSignIn as finishCoinpaySignIn } from '@profullstack/coinpay-onboard/oauth';
 import {
   createProfileStore,
   mountProfileRoutes,
@@ -27,6 +28,23 @@ import {
 } from '@typeheard/transcribe';
 import { Hono } from 'hono';
 import { getCookie, setCookie } from 'hono/cookie';
+import {
+  OAUTH_COOKIE as COINPAY_COOKIE,
+  OAUTH_COOKIE_MAX_AGE as COINPAY_COOKIE_MAX_AGE,
+  OAUTH_COOKIE_PATH as COINPAY_COOKIE_PATH,
+  SETTINGS_PATH as COINPAY_SETTINGS_PATH,
+  authorizeUrl as coinpayAuthorizeUrl,
+  coinpayConfig,
+  redirectUri as coinpayRedirectUri,
+  stateMatches as coinpayStateMatches,
+  dbCoinpayStore,
+  decodePending as decodeCoinpayPending,
+  disconnectCoinpay,
+  encodePending as encodeCoinpayPending,
+  isPlaceholderEmail as isCoinpayPlaceholder,
+  newPendingAuth as newCoinpayPending,
+  resolveCoinpayUser,
+} from './lib/coinpay-signin.js';
 import {
   acceptInvite,
   attributeRef,
@@ -233,7 +251,9 @@ app.get('/', async (c) => {
 });
 app.get('/pricing', (c) => html(c, Pricing({ config })));
 app.get('/docs', (c) => html(c, Docs({ config })));
-app.get('/signin', (c) => html(c, SignIn({ config })));
+app.get('/signin', (c) =>
+  html(c, SignIn({ config, error: c.req.query('coinpay_error')?.slice(0, 300) ?? null })),
+);
 app.get('/signup', (c) => html(c, SignIn({ config, signup: true })));
 
 app.get('/account', async (c) => {
@@ -245,6 +265,9 @@ app.get('/account', async (c) => {
     q.listPasskeys(user.id),
     profiles.get(user.id),
   ]);
+  const coinpayIdentity = coinpayConfig()
+    ? await q.coinpayIdentityByUser(user.id).catch(() => null)
+    : null;
   return html(
     c,
     Account({
@@ -259,6 +282,20 @@ app.get('/account', async (c) => {
       redeemError: c.req.query('redeem_error') ?? null,
       redeemed: Number(c.req.query('redeemed')) || 0,
       invited: Number(c.req.query('invited')) || 0,
+      coinpay: coinpayConfig()
+        ? {
+            connected: Boolean(coinpayIdentity),
+            email: coinpayIdentity?.coinpay_email ?? null,
+            onlyWayIn: isCoinpayPlaceholder(user.email),
+            notice:
+              c.req.query('coinpay') === 'connected'
+                ? 'CoinPay connected.'
+                : c.req.query('coinpay') === 'disconnected'
+                  ? 'CoinPay disconnected.'
+                  : null,
+            error: c.req.query('coinpay_error')?.slice(0, 300) ?? null,
+          }
+        : null,
     }),
   );
 });
@@ -570,6 +607,123 @@ app.get('/auth/magic', async (c) => {
   c.header('set-cookie', auth.sessionCookie(session.sessionId));
   if (getCookie(c, INVITE_COOKIE)) setCookie(c, INVITE_COOKIE, '', { path: '/', maxAge: 0 });
   return c.redirect(invited ? `/account?invited=${invited}` : '/account');
+});
+
+/*
+ * Sign in with CoinPay (lib/coinpay-signin.js). The account is found by the CoinPay
+ * `sub` only, never by the email CoinPay reports. mode=connect links CoinPay to the
+ * signed-in account from the account page.
+ */
+app.get('/api/v1/coinpay/oauth/start', async (c) => {
+  const cfg = coinpayConfig();
+  if (!cfg) return c.text('Sign in with CoinPay is not configured.', 503);
+  const mode = c.req.query('mode') === 'connect' ? 'connect' : 'login';
+  if (mode === 'connect') {
+    const { user, via } = await caller(c);
+    if (!user || via !== 'session') return c.redirect('/signin', 302);
+  }
+  const pending = newCoinpayPending(mode, c.req.query('next'));
+  setCookie(c, COINPAY_COOKIE, encodeCoinpayPending(pending), {
+    httpOnly: true,
+    secure: cfg.siteUrl.startsWith('https://'),
+    sameSite: 'Lax',
+    path: COINPAY_COOKIE_PATH,
+    maxAge: COINPAY_COOKIE_MAX_AGE,
+  });
+  c.header('cache-control', 'no-store');
+  return c.redirect(coinpayAuthorizeUrl(cfg, pending), 302);
+});
+
+app.get('/api/v1/coinpay/oauth/callback', async (c) => {
+  const cfg = coinpayConfig();
+  if (!cfg) return c.text('Sign in with CoinPay is not configured.', 503);
+  const pending = decodeCoinpayPending(getCookie(c, COINPAY_COOKIE));
+  const failPath = pending?.mode === 'connect' ? COINPAY_SETTINGS_PATH : '/signin';
+  const back = (path, error) => {
+    // Clear the one-shot cookie with an APPENDED header (setCookie), so a session
+    // cookie set before this with c.header survives.
+    setCookie(c, COINPAY_COOKIE, '', { path: COINPAY_COOKIE_PATH, maxAge: 0 });
+    c.header('cache-control', 'no-store');
+    const sep = path.includes('?') ? '&' : '?';
+    return c.redirect(
+      error ? `${path}${sep}coinpay_error=${encodeURIComponent(error)}` : path,
+      302,
+    );
+  };
+
+  if (!pending) return back('/signin', 'CoinPay sign-in expired. Try again.');
+  if (!coinpayStateMatches(pending.state, c.req.query('state'))) {
+    return back(failPath, 'CoinPay sign-in failed: state mismatch.');
+  }
+  if (c.req.query('error')) {
+    return back(
+      failPath,
+      `CoinPay: ${String(c.req.query('error_description') || c.req.query('error')).slice(0, 200)}`,
+    );
+  }
+  const code = c.req.query('code');
+  if (!code) return back(failPath, 'CoinPay sign-in failed: no code.');
+  const { user: current, via } = await caller(c);
+  const me = via === 'session' ? current : null;
+  if (pending.mode === 'connect' && !me)
+    return back('/signin', 'Sign in first, then connect CoinPay.');
+
+  let claims;
+  try {
+    const r = await finishCoinpaySignIn({
+      code,
+      verifier: pending.verifier,
+      nonce: pending.nonce,
+      clientId: cfg.clientId,
+      clientSecret: cfg.clientSecret,
+      redirectUri: coinpayRedirectUri(cfg),
+      base: cfg.issuer,
+    });
+    claims = {
+      sub: r.sub,
+      email: r.email ? r.email.slice(0, 320) : null,
+      name: r.name ? r.name.trim().slice(0, 200) : null,
+    };
+  } catch (err) {
+    console.error('[coinpay-signin] finish', err.message);
+    return back(failPath, 'CoinPay sign-in failed. Try again.');
+  }
+
+  let resolved;
+  try {
+    resolved = await resolveCoinpayUser(
+      { mode: pending.mode, currentUserId: me?.id ?? null, claims },
+      dbCoinpayStore(q),
+    );
+  } catch (err) {
+    console.error('[coinpay-signin] resolve', err.message);
+    return back(failPath, 'CoinPay sign-in failed. Try again.');
+  }
+  if (!resolved.ok) return back(failPath, resolved.error);
+  if (pending.mode === 'connect') return back(`${COINPAY_SETTINGS_PATH}?coinpay=connected`);
+  if (me?.id === resolved.userId) return back(pending.next);
+
+  const sessionId = await q.startSession({
+    userId: resolved.userId,
+    ttlDays: config.session.ttlDays,
+    userAgent: c.req.header('user-agent'),
+  });
+  // Session first with c.header (replaces), then back() appends the clear.
+  c.header('set-cookie', auth.sessionCookie(sessionId));
+  return back(pending.next);
+});
+
+app.post('/api/v1/coinpay/disconnect', async (c) => {
+  const { user, via } = await caller(c);
+  if (!user || via !== 'session') return c.redirect('/signin', 303);
+  const r = await disconnectCoinpay(user, dbCoinpayStore(q));
+  if (c.req.header('accept')?.includes('application/json')) return c.json(r, r.ok ? 200 : 409);
+  return c.redirect(
+    r.ok
+      ? `${COINPAY_SETTINGS_PATH}?coinpay=disconnected`
+      : `${COINPAY_SETTINGS_PATH}?coinpay_error=${encodeURIComponent(r.error)}`,
+    303,
+  );
 });
 
 app.post('/auth/signout', async (c) => {
@@ -968,7 +1122,8 @@ app.post('/webhooks/coinpay', async (c) => {
   if (receipt) {
     const { userId, ...details } = receipt;
     const email = await q.userEmail(userId);
-    if (email && config.mail.enabled) {
+    // A CoinPay-made account's placeholder address receives no mail.
+    if (email && !isCoinpayPlaceholder(email) && config.mail.enabled) {
       sendTopupReceipt({ email, ...details }).catch((err) =>
         console.error(`[mail] receipt not sent: ${err?.message ?? err}`),
       );
