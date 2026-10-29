@@ -10,6 +10,7 @@ import {
   PROFILE_ENHANCE_SCRIPT,
   renderProfileFields,
 } from '@profullstack/profile';
+import { coinpayConfig } from '../lib/coinpay-signin.js';
 import { siteFooter } from './footer.js';
 
 const esc = (s) =>
@@ -451,6 +452,25 @@ function AccountNav(active) {
 
 const PASSKEY_JS = `<script src="https://unpkg.com/@simplewebauthn/browser@13/dist/bundle/index.umd.min.js"></script>`;
 
+/** Connect / Disconnect CoinPay on the account page. */
+function CoinpayCard(cp) {
+  const body = cp.connected
+    ? `<p class="muted" style="margin:0 0 12px">Connected${cp.email ? ` (${esc(cp.email)})` : ''}. You can sign in with CoinPay.</p>
+  ${
+    cp.onlyWayIn
+      ? '<p class="muted" style="margin:0">CoinPay is the only way into this account, so it cannot be disconnected.</p>'
+      : '<form method="post" action="/api/v1/coinpay/disconnect" style="margin:0"><button class="btn small ghost">Disconnect CoinPay</button></form>'
+  }`
+    : `<p class="muted" style="margin:0 0 12px">Connect your CoinPay account to sign in with it next time.</p>
+  <a class="btn small" href="/api/v1/coinpay/oauth/start?mode=connect&amp;next=%2Faccount">Connect CoinPay</a>`;
+  return `<h2 id="coinpay">CoinPay</h2>
+${cp.notice ? `<p class="note">${esc(cp.notice)}</p>` : ''}
+${cp.error ? `<p class="note" role="alert">${esc(cp.error)}</p>` : ''}
+<div class="card">
+  ${body}
+</div>`;
+}
+
 export function Account({
   user,
   balance,
@@ -463,6 +483,9 @@ export function Account({
   redeemError = null,
   redeemed = 0,
   invited = 0,
+  // Sign in with CoinPay: { connected, email, onlyWayIn, notice, error }, or null when
+  // CoinPay is not configured.
+  coinpay = null,
 }) {
   const rows = ledger
     .map(
@@ -501,6 +524,8 @@ ${redeemError ? `<p class="note">${esc(redeemError)}</p>` : ''}
   <p class="muted" style="margin:0 0 12px">${passkeys.length ? `${passkeys.length} passkey${passkeys.length === 1 ? '' : 's'} on this account.` : 'None yet. A passkey signs you in with your fingerprint or face instead of an emailed link.'}</p>
   <button class="btn small" id="addkey">Add a passkey</button> <span id="keymsg" class="muted"></span>
 </div>
+
+${coinpay ? CoinpayCard(coinpay) : ''}
 
 <h2 id="contact">Contact details</h2>
 <p class="muted">Private to your account. Sent with ${esc(user.email)}.</p>
@@ -718,6 +743,15 @@ export function SignIn({
 ${invite ? `<p class="note">Someone wanted you on typeheard.${bonus > 0 ? ` Make your account with this link and you both get <strong>${bonus}</strong> free minutes of transcription.` : ''}</p>` : ''}
 <p class="lede">${signup ? 'Put in your email and we will send a link. Clicking it makes the account; there is no password to choose.' : 'We will email you a link. If you added a passkey, use that instead.'}</p>
 ${error ? `<p class="note">${esc(error)}</p>` : ''}
+${
+  /* Sign in with CoinPay first: the house master account. Bound to the CoinPay account
+     itself, never matched to an account by email. Left off an invite sign-up, which
+     only counts through the emailed link. */
+  coinpayConfig() && !invite
+    ? `<p style="max-width:460px"><a class="btn coinpay-signin" data-coinpay-signin href="/api/v1/coinpay/oauth/start?next=%2Faccount">${signup ? 'Sign up with CoinPay' : 'Sign in with CoinPay'}</a></p>
+<p class="muted">or</p>`
+    : ''
+}
 <form class="card" method="post" action="/auth/link" style="max-width:460px">
   ${signup ? '<input type="hidden" name="mode" value="signup">' : ''}
   ${invite ? `<input type="hidden" name="invite" value="${esc(invite)}">` : ''}
