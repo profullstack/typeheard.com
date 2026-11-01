@@ -532,9 +532,10 @@ ${coinpay ? CoinpayCard(coinpay) : ''}
 ${contactError ? `<p class="note">${esc(contactError)}</p>` : ''}
 ${contactSaved ? '<p class="muted">Contact details saved.</p>' : ''}
 <form method="post" action="/account/contact" class="card" style="max-width:460px">
-  ${renderProfileFields({ fields: SIGNUP_FIELDS, values: contact ?? {} })}
+  ${renderProfileFields({ fields: SIGNUP_FIELDS, values: contact ?? {}, importOpenProfile: true })}
   <button class="btn">Save contact details</button>
 </form>
+<script>${PROFILE_ENHANCE_SCRIPT}</script>
 
 <h2>History</h2>
 <div class="card">
