@@ -334,6 +334,7 @@ any file stay free whether you have credit or not.</p>
 
 <div class="card">
 <p class="muted" style="margin:0 0 14px">Pay with any major coin or PayPal on the CoinPay checkout page.</p>
+<p class="muted" style="margin:0 0 14px">Deposit $99 in your CoinPay wallet and get a free month: <a href="https://coinpayportal.com/pass">CoinPay Pass</a> (300 free minutes when you sign in with CoinPay).</p>
 <table>
 <tr><th>Top up</th><th>Minutes</th><th>Works out at</th><th></th></tr>
 ${rows}
