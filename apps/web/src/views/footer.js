@@ -14,7 +14,7 @@
 import { footerHtml, footerHtmlSync } from '@profullstack/footer';
 
 const PFS_OPTIONS = {
-  site: 'https://typeheard.com/',
+  site: 'https://typeheard.pwa.pit.world/',
   links: [
     { label: 'Pricing', href: '/pricing' },
     { label: 'API', href: '/docs' },
@@ -26,7 +26,7 @@ const PFS_OPTIONS = {
 
 let pfs = footerHtmlSync(PFS_OPTIONS);
 
-const PIT_FOOTER_URL = 'https://pit.world/snippets/footer.html?site=typeheard.com';
+const PIT_FOOTER_URL = 'https://pit.world/snippets/footer.html?site=typeheard.pwa.pit.world';
 const TTL_MS = 60 * 60 * 1000;
 
 let pit = '';

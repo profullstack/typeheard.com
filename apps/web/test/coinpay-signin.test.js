@@ -32,7 +32,7 @@ const cfg = {
   clientId: 'cp_x',
   clientSecret: 's',
   issuer: 'https://coinpayportal.com',
-  siteUrl: 'https://typeheard.com',
+  siteUrl: 'https://typeheard.pwa.pit.world',
 };
 
 describe('Sign in with CoinPay', () => {
@@ -44,7 +44,7 @@ describe('Sign in with CoinPay', () => {
     expect(url.searchParams.get('code_challenge')).toBe(p.challenge);
     expect(url.searchParams.get('state')).toBe(p.state);
     expect(url.searchParams.get('nonce')).toBe(p.nonce);
-    expect(url.searchParams.get('redirect_uri')).toBe(`https://typeheard.com${cp.CALLBACK_PATH}`);
+    expect(url.searchParams.get('redirect_uri')).toBe(`https://typeheard.pwa.pit.world${cp.CALLBACK_PATH}`);
     expect(url.searchParams.get('scope')).toBe('openid profile email');
   });
 
@@ -139,7 +139,7 @@ describe('Sign in with CoinPay', () => {
       id: process.env.COINPAY_OAUTH_CLIENT_ID,
       secret: process.env.COINPAY_OAUTH_CLIENT_SECRET,
     };
-    const config = { siteUrl: 'https://typeheard.com' };
+    const config = { siteUrl: 'https://typeheard.pwa.pit.world' };
     try {
       delete process.env.COINPAY_OAUTH_CLIENT_ID;
       expect(SignIn({ config })).not.toContain('Sign in with CoinPay');
@@ -167,7 +167,7 @@ describe('Sign in with CoinPay', () => {
       balance: 0,
       ledger: [],
       passkeys: [],
-      config: { siteUrl: 'https://typeheard.com' },
+      config: { siteUrl: 'https://typeheard.pwa.pit.world' },
       contact: {},
     };
     expect(Account(base)).not.toContain('Connect CoinPay');

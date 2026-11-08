@@ -40,7 +40,7 @@ export async function resolveAuth({ server, key } = {}) {
       server ||
       process.env.TYPEHEARD_URL ||
       saved.server ||
-      'https://typeheard.com'
+      'https://typeheard.pwa.pit.world'
     ).replace(/\/+$/, ''),
     key: key || process.env.TYPEHEARD_API_KEY || saved.key || '',
   };

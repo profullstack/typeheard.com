@@ -2,7 +2,7 @@
  * Sign in with CoinPay (CoinPay is the house master account).
  *
  * Confidential OIDC client: authorization code + PKCE S256 + state + nonce,
- * exact redirect https://typeheard.com/api/v1/coinpay/oauth/callback, scopes
+ * exact redirect https://typeheard.pwa.pit.world/api/v1/coinpay/oauth/callback, scopes
  * "openid profile email". The protocol half (authorize URL, code exchange that
  * always sends the client secret, id_token iss/aud/exp/nonce checks, userinfo
  * sub match) is @profullstack/coinpay-onboard/oauth.
@@ -37,7 +37,7 @@ export function coinpayConfig(env = process.env) {
   const clientSecret = (env.COINPAY_OAUTH_CLIENT_SECRET ?? '').trim();
   if (!clientId || !clientSecret) return null;
   const issuer = (env.COINPAY_OAUTH_ISSUER || COINPAY_ISSUER).replace(/\/+$/, '');
-  const siteUrl = (env.SITE_URL || 'https://typeheard.com').replace(/\/+$/, '');
+  const siteUrl = (env.SITE_URL || 'https://typeheard.pwa.pit.world').replace(/\/+$/, '');
   return { clientId, clientSecret, issuer, siteUrl };
 }
 
