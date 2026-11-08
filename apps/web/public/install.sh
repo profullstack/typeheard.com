@@ -1,7 +1,7 @@
 #!/bin/sh
 # Install typeheard, the typeheard.com CLI and TUI (npm: @profullstack/typeheard).
 #
-#   curl -fsSL https://typeheard.com/install.sh | sh
+#   curl -fsSL https://typeheard.pwa.pit.world/install.sh | sh
 #
 # Needs Node >= 22.6 (the command runs on Node). Installs with bun if present,
 # otherwise npm. When the global npm prefix is not writable it installs into

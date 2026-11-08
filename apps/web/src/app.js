@@ -231,7 +231,7 @@ const asset = (path) => async (c) => {
   c.header('cache-control', 'public, max-age=86400');
   return c.body(await file.arrayBuffer());
 };
-// install.sh is the CLI installer: curl -fsSL https://typeheard.com/install.sh | sh
+// install.sh is the CLI installer: curl -fsSL https://typeheard.pwa.pit.world/install.sh | sh
 for (const name of [
   'favicon.ico',
   'favicon.svg',
@@ -1172,7 +1172,7 @@ app.get('/robots.txt', (c) =>
 app.get('/.well-known/openwebring.json', (c) =>
   c.json({
     openwebring: '0.1',
-    site: { url: 'https://typeheard.com/', name: 'typeheard' },
+    site: { url: 'https://typeheard.pwa.pit.world/', name: 'typeheard' },
     made_by: 'both',
     rings: [{ ring: 'https://rssamplifier.com/ring/profullstack', slug: 'typeheard-com' }],
   }),

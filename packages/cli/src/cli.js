@@ -39,7 +39,7 @@ import {
 const HELP = `typeheard: drop a recording, get what was said.
 
   typeheard <file> [--format txt|md|srt|vtt|json] [--language auto|en|es|...] [--preview] [--out FILE]
-  typeheard login [KEY]        save an API key (make one at https://typeheard.com/account/keys)
+  typeheard login [KEY]        save an API key (make one at https://typeheard.pwa.pit.world/account/keys)
   typeheard list               your transcripts
   typeheard get ID [--format md]
   typeheard me                 minutes left on your account

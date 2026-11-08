@@ -1,6 +1,6 @@
 # @profullstack/typeheard-mcp
 
-MCP server for [typeheard.com](https://typeheard.com): transcribe audio and video files
+MCP server for [typeheard.com](https://typeheard.pwa.pit.world): transcribe audio and video files
 from any MCP client.
 
 ```json
@@ -9,6 +9,6 @@ from any MCP client.
 ```
 
 Tools: `transcribe_file`, `get_transcript`, `list_transcripts`. The CLI installs with
-`curl -fsSL https://typeheard.com/install.sh | sh`. Docs: https://typeheard.com/docs
+`curl -fsSL https://typeheard.pwa.pit.world/install.sh | sh`. Docs: https://typeheard.pwa.pit.world/docs
 
 MIT, Profullstack, Inc.

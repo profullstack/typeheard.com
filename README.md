@@ -18,7 +18,7 @@ I already have" and "transcription software for my thesis interviews".
 ## Use it
 
 ```bash
-curl -fsSL https://typeheard.com/install.sh | sh              # installs the typeheard CLI
+curl -fsSL https://typeheard.pwa.pit.world/install.sh | sh              # installs the typeheard CLI
 ```
 
 ```bash
@@ -31,8 +31,8 @@ typeheard tui
 No install: `npx -y @profullstack/typeheard interview.m4a` (Node 22.6+).
 
 ```bash
-curl -F file=@interview.m4a -H "Authorization: Bearer $TYPEHEARD_API_KEY" https://typeheard.com/api/v1/transcripts
-curl https://typeheard.com/api/v1/transcripts/<id>/txt        # also md, srt, vtt, json
+curl -F file=@interview.m4a -H "Authorization: Bearer $TYPEHEARD_API_KEY" https://typeheard.pwa.pit.world/api/v1/transcripts
+curl https://typeheard.pwa.pit.world/api/v1/transcripts/<id>/txt        # also md, srt, vtt, json
 ```
 
 MCP: `npx -y @profullstack/typeheard-mcp` with `TYPEHEARD_API_KEY` set. Its tools are

@@ -1,9 +1,9 @@
 # @profullstack/typeheard
 
-Transcribe audio and video from the terminal with [typeheard.com](https://typeheard.com).
+Transcribe audio and video from the terminal with [typeheard.com](https://typeheard.pwa.pit.world).
 
 ```sh
-curl -fsSL https://typeheard.com/install.sh | sh
+curl -fsSL https://typeheard.pwa.pit.world/install.sh | sh
 ```
 
 Or with npm (Node >= 22.6): `npm i -g @profullstack/typeheard`, or run it once with
@@ -17,6 +17,6 @@ typeheard tui                              # your transcripts, in the terminal
 ```
 
 Without a key you get the first few minutes of any file free. `TYPEHEARD_API_KEY` and
-`TYPEHEARD_URL` override the saved config. Docs: https://typeheard.com/docs
+`TYPEHEARD_URL` override the saved config. Docs: https://typeheard.pwa.pit.world/docs
 
 MIT, Profullstack, Inc.

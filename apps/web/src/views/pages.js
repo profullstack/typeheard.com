@@ -98,7 +98,7 @@ const AD = `<div class="wrap"><aside class="cp-ad" data-cp-ad data-slot="${AD_SL
 <script src="https://crawlproof.com/ad.js" async></script>`;
 
 function page({ title, description, body, canonical, config, ad = false }) {
-  const site = config?.siteUrl ?? 'https://typeheard.com';
+  const site = config?.siteUrl ?? 'https://typeheard.pwa.pit.world';
   return `<!doctype html>
 <html lang="en">
 <head>
