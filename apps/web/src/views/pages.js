@@ -119,6 +119,34 @@ ${canonical ? `<link rel="canonical" href="${esc(canonical)}">` : ''}
 <meta property="og:image" content="${esc(site)}/icons/icon-512x512.png">
 <style>${STYLE}</style>
 <script data-site="2d708fa7-d482-436e-964e-34629305d6db" src="https://crawlproof.com/stats.js" async></script>
+<!-- WebMCP (@profullstack/webmcp): site tools plus the signed-in person's transcripts (same JSON API the
+     history page uses, session cookie) for the AI agent in the visitor's browser. -->
+<script type="module" data-webmcp src="https://cdn.jsdelivr.net/npm/@profullstack/webmcp@0/src/embed.js" data-pages='{"pricing":"/pricing","docs":"/docs","account":"/account","history":"/account/history","invites":"/invites"}'></script>
+<script type="module">
+const W = window.ProfullstackWebMCP;
+const get = async (path) => {
+  const res = await fetch(path, { credentials: 'same-origin', headers: { accept: 'application/json' } });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body.error || 'HTTP ' + res.status);
+  return body;
+};
+if (W && W.registerTool) {
+  W.registerTool({
+    name: 'list_transcripts',
+    description: 'List the transcripts of the signed-in person on typeheard (id, title, status, length, links). Needs a signed-in session.',
+    inputSchema: { type: 'object', properties: {} },
+    annotations: { readOnlyHint: true },
+    execute: () => get('/api/v1/transcripts'),
+  });
+  W.registerTool({
+    name: 'get_transcript',
+    description: 'Read one typeheard transcript by id: status, queue position, text and download links.',
+    inputSchema: { type: 'object', properties: { id: { type: 'string', description: 'Transcript id from list_transcripts or a /t/<id> link' } }, required: ['id'] },
+    annotations: { readOnlyHint: true },
+    execute: ({ id }) => get('/api/v1/transcripts/' + encodeURIComponent(String(id))),
+  });
+}
+</script>
 </head>
 <body>
 <header><div class="wrap">
