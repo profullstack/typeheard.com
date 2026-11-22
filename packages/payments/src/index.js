@@ -1,4 +1,5 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
+import rootPackage from '../../../package.json' with { type: 'json' };
 
 /**
  * CoinPay: taking money, and turning exactly one settled payment into access.
@@ -77,6 +78,25 @@ export function paymentProperty() {
     throw new Error('payments need a property: pass siteUrl or property to configurePayments');
   return host;
 }
+
+/**
+ * The User-Agent every call to CoinPay sends: `<site host>/<version> (+<site>)`.
+ * Every fleet site shares one host and IP, so without it CoinPay's logs and
+ * throttle saw them all as one `Bun/x.y.z` caller.
+ */
+export function coinpayUserAgent() {
+  const host = paymentProperty();
+  let origin = '';
+  try {
+    origin = new URL(need().siteUrl).origin;
+  } catch {
+    origin = host ? `https://${host}` : '';
+  }
+  const version = rootPackage?.version;
+  const product = version ? `${host}/${version}` : host;
+  return [product, origin ? `(+${origin})` : ''].filter(Boolean).join(' ');
+}
+
 
 function hostOf(value) {
   const v = String(value).trim();
@@ -193,6 +213,7 @@ export async function createCheckout({
     headers: {
       authorization: `Bearer ${coinpay.apiKey}`,
       'content-type': 'application/json',
+      'user-agent': coinpayUserAgent(),
     },
     body: JSON.stringify({
       amount: amountCents / 100,
@@ -253,7 +274,7 @@ export async function getCheckoutSession(sessionId) {
   const { coinpay } = need();
   if (!/^cs_[A-Za-z0-9]+$/.test(String(sessionId ?? ''))) return null;
   const res = await fetch(`${baseUrlOf(coinpay)}/api/checkout/sessions/${sessionId}`, {
-    headers: { authorization: `Bearer ${coinpay.apiKey}` },
+    headers: { authorization: `Bearer ${coinpay.apiKey}`, 'user-agent': coinpayUserAgent() },
     signal: AbortSignal.timeout(10_000),
   });
   if (!res.ok) return null;
