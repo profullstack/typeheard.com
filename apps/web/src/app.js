@@ -18,6 +18,7 @@ import * as auth from '@typeheard/auth';
 import { config } from '@typeheard/config';
 import { sql } from '@typeheard/db';
 import * as q from '@typeheard/db/queries';
+import { AUTH_GUARD_RULES, isAuthRoute } from './lib/auth-guards.js';
 import { grantCoinpayPass } from './lib/pass.js';
 import { sendLoginLink, sendTopupReceipt } from '@typeheard/notify';
 import * as pay from '@typeheard/payments';
@@ -167,7 +168,12 @@ app.use(
     openPaths: UNMETERED_PATHS,
     // API keys are not exempt: the prefix is public, so exempting on its shape would
     // let anyone skip the limit by sending a made-up key. A minute is plenty of polls.
-    exempt: (request) => Boolean(request.headers.get('cookie')?.includes(config.session.cookie)),
+    rules: AUTH_GUARD_RULES,
+    // A signed-in person is not metered, except on sign-in itself: the cookie check is a
+    // header anyone can write, so it must not skip the brute-force guards.
+    exempt: (request) =>
+      !isAuthRoute(request) &&
+      Boolean(request.headers.get('cookie')?.includes(config.session.cookie)),
   }),
 );
 
